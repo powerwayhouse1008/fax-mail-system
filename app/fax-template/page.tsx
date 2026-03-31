@@ -53,7 +53,9 @@ const faxTemplateContent: FaxTemplateContent = {
 export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) {
   const channel = searchParams?.channel ?? "fax";
   const [content, setContent] = useState<FaxTemplateContent>(faxTemplateContent);
+  const [uploadedCardName, setUploadedCardName] = useState("");
   const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
+   const isFaxChannel = channel === "fax";
 
   const updateField = <K extends keyof FaxTemplateContent>(key: K, value: FaxTemplateContent[K]) => {
     setContent((prev) => ({ ...prev, [key]: value }));
@@ -67,7 +69,18 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
           <p>Live editor</p>
           <h2>入力フォーム</h2>
         </div>
-        
+        {isFaxChannel && (
+            <label className="field field-full" htmlFor="business-card-file">
+              <span>名刺ファイル（画像/PDF）</span>
+              <input
+                id="business-card-file"
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setUploadedCardName(e.target.files?.[0]?.name ?? "")}
+              />
+              {uploadedCardName && <small>選択中: {uploadedCardName}</small>}
+            </label>
+          )}
           {isGmailChannel ? (
           <div className="gmail-editor">
             <label className="field">
