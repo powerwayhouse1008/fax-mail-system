@@ -1,9 +1,10 @@
 import Link from "next/link";
+
 const features = ["FAX一括送信", "Gmail配信", "送信履歴管理"];
 
 export default function HomePage() {
   return (
-     <main className="home-shell">
+    <main className="home-shell">
       <section className="hero-card">
         <p className="badge">日本語版スターター</p>
 
