@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type FaxTemplatePageProps = {
   searchParams?: {
@@ -54,6 +54,8 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   const channel = searchParams?.channel ?? "fax";
   const [content, setContent] = useState<FaxTemplateContent>(faxTemplateContent);
   const [uploadedCardName, setUploadedCardName] = useState("");
+  const [uploadedCardUrl, setUploadedCardUrl] = useState("");
+  const [uploadedCardType, setUploadedCardType] = useState("");
   const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
    const isFaxChannel = channel === "fax";
 
@@ -61,6 +63,34 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
     setContent((prev) => ({ ...prev, [key]: value }));
   };
      const isGmailChannel = channel === "gmail";
+ useEffect(() => {
+    return () => {
+      if (uploadedCardUrl) {
+        URL.revokeObjectURL(uploadedCardUrl);
+      }
+    };
+  }, [uploadedCardUrl]);
+
+  const handleBusinessCardChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setUploadedCardName("");
+      setUploadedCardType("");
+      setUploadedCardUrl("");
+      return;
+    }
+
+    setUploadedCardName(file.name);
+    setUploadedCardType(file.type);
+
+    const nextUrl = URL.createObjectURL(file);
+    setUploadedCardUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
+      return nextUrl;
+    });
+  };
 
   return (
     <main className="template-shell">
@@ -76,7 +106,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
                 id="business-card-file"
                 type="file"
                 accept="image/*,.pdf"
-                onChange={(e) => setUploadedCardName(e.target.files?.[0]?.name ?? "")}
+                onChange={handleBusinessCardChange}
               />
               {uploadedCardName && <small>選択中: {uploadedCardName}</small>}
             </label>
@@ -252,6 +282,24 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
             <tr>
               <th>内見希望時間</th>
               <td>{content.preferredTime}</td>
+            </tr>
+             <tr>
+              <th>名刺</th>
+              <td>
+                {uploadedCardUrl ? (
+                  <div className="business-card-preview">
+                    {uploadedCardType.startsWith("image/") ? (
+                      <img src={uploadedCardUrl} alt="名刺プレビュー" />
+                    ) : (
+                      <a href={uploadedCardUrl} target="_blank" rel="noreferrer">
+                        {uploadedCardName}
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  "未添付"
+                )}
+              </td>
             </tr>
           </tbody>
         </table>
