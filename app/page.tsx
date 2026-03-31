@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-const features = ["FAX一括送信", "Gmail配信", "送信履歴管理"];
+const features = ["FAX一括送信", "Gmail配信", "名刺アップロード", "送信履歴管理"];
 
 export default function HomePage() {
   return (
