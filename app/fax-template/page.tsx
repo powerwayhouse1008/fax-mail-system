@@ -41,12 +41,12 @@ const faxTemplateContent: FaxTemplateContent = {
 
 export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) {
   const channel = searchParams?.channel ?? "fax";
-   const [content, setContent] = useState<FaxTemplateContent>(defaultFaxTemplateContent);
+  const [content, setContent] = useState<FaxTemplateContent>(faxTemplateContent);
   const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
 
   const updateField = <K extends keyof FaxTemplateContent>(key: K, value: FaxTemplateContent[K]) => {
     setContent((prev) => ({ ...prev, [key]: value }));
-  };;
+  };
 
   return (
     <main className="template-shell">
