@@ -141,7 +141,7 @@ body {
 .dashboard-shell,
 .template-shell {
   min-height: 100vh;
-  padding: 2rem 1rem;
+ padding: 2rem 1rem 3rem;
 }
 
 .dashboard-card {
@@ -182,9 +182,79 @@ body {
   width: min(920px, 100%);
   margin: 0 auto;
   background: #fff;
-  border: 1px solid #111;
-  padding: 1.25rem;
+  border: 1px solid #dbe2ea;
+  border-radius: 16px;
+  padding: 1.4rem;
   color: #111;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
+}
+
+.fax-sheet + .fax-sheet {
+  margin-top: 1.2rem;
+}
+
+.fax-editor {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.editor-heading p {
+  margin: 0;
+  display: inline-flex;
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+}
+
+.editor-heading h2 {
+  margin: 0.7rem 0 1rem;
+  font-size: 1.8rem;
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem 0.75rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field > span {
+  color: #334155;
+  font-weight: 600;
+}
+
+.field-full {
+  grid-column: 1 / -1;
+}
+
+.field input,
+.field textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.58rem 0.66rem;
+  font: inherit;
+  color: #0f172a;
+  background: #fff;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.16);
 }
 
 .fax-header {
@@ -248,4 +318,9 @@ body {
 
 .fax-signature p {
   margin: 0.2rem 0;
+}
+@media (max-width: 640px) {
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
 }
