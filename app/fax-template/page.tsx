@@ -9,6 +9,8 @@ type FaxTemplatePageProps = {
 };
 type FaxTemplateContent = {
   to: string;
+  faxNumber: string;
+  recipientEmails: string;
   from: string;
   greeting: string;
   cc: string;
@@ -32,6 +34,8 @@ const channelLabels: Record<string, string> = {
 };
 const faxTemplateContent: FaxTemplateContent = {
   to: "有限会社 栄商事 御中 / ご担当者様",
+  faxNumber: "03-1234-5678",
+  recipientEmails: "example-a@gmail.com, example-b@gmail.com",
   from: "株式会社パワーウェイ / マイ",
    cc: "",
   bcc: "",
@@ -155,10 +159,26 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
               <input value={content.to} onChange={(e) => updateField("to", e.target.value)} />
             </label>
             <label className="field">
+              <span>FAX番号</span>
+              <input
+                value={content.faxNumber}
+                onChange={(e) => updateField("faxNumber", e.target.value)}
+                placeholder="03-1234-5678"
+              />
+            </label>
+            <label className="field">
               <span>FROM</span>
               <input value={content.from} onChange={(e) => updateField("from", e.target.value)} />
             </label>
             <label>
+              <label className="field field-full">
+              <span>Gmail送信先リスト（カンマ区切り）</span>
+              <input
+                value={content.recipientEmails}
+                onChange={(e) => updateField("recipientEmails", e.target.value)}
+                placeholder="a@gmail.com, b@gmail.com"
+              />
+            </label>
               連絡事項
               <input value={content.contact} onChange={(e) => updateField("contact", e.target.value)} />
             </label>
@@ -259,7 +279,13 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
             <strong>TO:</strong> {content.to}
           </div>
           <div>
+            <strong>FAX:</strong> {content.faxNumber}
+          </div>
+          <div>
            <strong>FROM:</strong> {content.from}
+          </div>
+          <div>
+            <strong>Gmail配信先:</strong> {content.recipientEmails || "（なし）"}
           </div>
         </section>
 
