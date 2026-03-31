@@ -1,3 +1,7 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
 type FaxTemplatePageProps = {
   searchParams?: {
     channel?: string;
@@ -37,10 +41,88 @@ const faxTemplateContent: FaxTemplateContent = {
 
 export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) {
   const channel = searchParams?.channel ?? "fax";
-  const channelLabel = channelLabels[channel] ?? "FAX一括送信";
+   const [content, setContent] = useState<FaxTemplateContent>(defaultFaxTemplateContent);
+  const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
+
+  const updateField = <K extends keyof FaxTemplateContent>(key: K, value: FaxTemplateContent[K]) => {
+    setContent((prev) => ({ ...prev, [key]: value }));
+  };;
 
   return (
     <main className="template-shell">
+      <article className="fax-sheet" style={{ marginBottom: 24 }}>
+        <h2 style={{ marginBottom: 16 }}>入力フォーム</h2>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            gap: 12,
+          }}
+        >
+          <label>
+            TO
+            <input value={content.to} onChange={(e) => updateField("to", e.target.value)} />
+          </label>
+          <label>
+            FROM
+            <input value={content.from} onChange={(e) => updateField("from", e.target.value)} />
+          </label>
+          <label>
+            連絡事項
+            <input value={content.contact} onChange={(e) => updateField("contact", e.target.value)} />
+          </label>
+          <label>
+            物件名 / 室
+            <input
+              value={content.propertyName}
+              onChange={(e) => updateField("propertyName", e.target.value)}
+            />
+          </label>
+          <label>
+            内見希望日
+            <input
+              value={content.preferredDate}
+              onChange={(e) => updateField("preferredDate", e.target.value)}
+            />
+          </label>
+          <label>
+            内見希望時間
+            <input
+              value={content.preferredTime}
+              onChange={(e) => updateField("preferredTime", e.target.value)}
+            />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            挨拶文
+            <textarea
+              value={content.greeting}
+              onChange={(e) => updateField("greeting", e.target.value)}
+              rows={2}
+            />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            依頼文
+            <textarea
+              value={content.request}
+              onChange={(e) => updateField("request", e.target.value)}
+              rows={2}
+            />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            会社名
+            <input value={content.companyName} onChange={(e) => updateField("companyName", e.target.value)} />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            住所
+            <input value={content.address} onChange={(e) => updateField("address", e.target.value)} />
+          </label>
+          <label style={{ gridColumn: "1 / -1" }}>
+            電話/FAX
+            <input value={content.phoneAndFax} onChange={(e) => updateField("phoneAndFax", e.target.value)} />
+          </label>
+        </div>
+      </article>
+      
       <article className="fax-sheet">
         <header className="fax-header">
           <h1>見送付状</h1>
