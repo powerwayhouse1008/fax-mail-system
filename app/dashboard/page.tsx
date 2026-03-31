@@ -1,15 +1,10 @@
 import Link from "next/link";
 
 const actions = [
-   {
-    title: "名刺アップロード",
-    description: "送信先として使う名刺画像やPDFを登録します。",
-    href: "/business-card-upload",
-    cta: "名刺をアップロード",
-  },
+   
   {
     title: "FAX一括送信",
-    description: "FAX送信用の見送付状をテンプレートから作成します。",
+   description: "FAX送信テンプレート作成と名刺アップロードをまとめて行います。",
     href: "/fax-template?channel=fax",
     cta: "FAX送付状を作成",
   },
