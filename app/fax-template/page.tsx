@@ -50,74 +50,71 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
 
   return (
     <main className="template-shell">
-      <article className="fax-sheet" style={{ marginBottom: 24 }}>
-        <h2 style={{ marginBottom: 16 }}>入力フォーム</h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-            gap: 12,
-          }}
-        >
-          <label>
-            TO
+      <article className="fax-sheet fax-editor">
+        <div className="editor-heading">
+          <p>Live editor</p>
+          <h2>入力フォーム</h2>
+        </div>
+        <div className="editor-grid">
+          <label className="field">
+            <span>TO</span>
             <input value={content.to} onChange={(e) => updateField("to", e.target.value)} />
           </label>
-          <label>
-            FROM
+          <label className="field">
+            <span>FROM</span>
             <input value={content.from} onChange={(e) => updateField("from", e.target.value)} />
           </label>
           <label>
             連絡事項
             <input value={content.contact} onChange={(e) => updateField("contact", e.target.value)} />
           </label>
-          <label>
-            物件名 / 室
+          <label className="field">
+            <span>物件名 / 室</span>
             <input
               value={content.propertyName}
               onChange={(e) => updateField("propertyName", e.target.value)}
             />
           </label>
-          <label>
-            内見希望日
+          <label className="field">
+            <span>内見希望日</span>
             <input
               value={content.preferredDate}
               onChange={(e) => updateField("preferredDate", e.target.value)}
             />
           </label>
-          <label>
-            内見希望時間
+          <label className="field">
+            <span>内見希望時間</span>
             <input
               value={content.preferredTime}
               onChange={(e) => updateField("preferredTime", e.target.value)}
             />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            挨拶文
+          <label className="field field-full">
+            <span>挨拶文</span>
             <textarea
               value={content.greeting}
               onChange={(e) => updateField("greeting", e.target.value)}
-              rows={2}
+              rows={3}
             />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            依頼文
+           <label className="field field-full">
+            <span>依頼文</span>
             <textarea
               value={content.request}
               onChange={(e) => updateField("request", e.target.value)}
-              rows={2}
+              rows={3}
             />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            会社名
+          <label className="field field-full">
+            <span>会社名</span>
             <input value={content.companyName} onChange={(e) => updateField("companyName", e.target.value)} />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            住所
+          <label className="field field-full">
+            <span>住所</span>
             <input value={content.address} onChange={(e) => updateField("address", e.target.value)} />
           </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            電話/FAX
+          <label className="field field-full">
+            <span>電話/FAX</span>
             <input value={content.phoneAndFax} onChange={(e) => updateField("phoneAndFax", e.target.value)} />
           </label>
         </div>
@@ -135,40 +132,40 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
 
         <section className="fax-party">
           <div>
-           <strong>TO:</strong> {faxTemplateContent.to}
+            <strong>TO:</strong> {content.to}
           </div>
           <div>
-            <strong>FROM:</strong> {faxTemplateContent.from}
+           <strong>FROM:</strong> {content.from}
           </div>
         </section>
 
         <section className="fax-body">
-          <p>{faxTemplateContent.greeting}</p>
-          <p>{faxTemplateContent.request}</p>
-          <p>連絡事項：{faxTemplateContent.contact}</p>
+          <p>{content.greeting}</p>
+          <p>{content.request}</p>
+          <p>連絡事項：{content.contact}</p>
         </section>
 
         <table className="fax-table">
           <tbody>
             <tr>
               <th>物件名 / 室</th>
-               <td>{faxTemplateContent.propertyName}</td>
+               <td>{content.propertyName}</td>
             </tr>
             <tr>
               <th>内見希望日</th>
-              <td>{faxTemplateContent.preferredDate}</td>
+              <td>{content.preferredDate}</td>
             </tr>
             <tr>
               <th>内見希望時間</th>
-              <td>{faxTemplateContent.preferredTime}</td>
+              <td>{content.preferredTime}</td>
             </tr>
           </tbody>
         </table>
 
         <section className="fax-signature">
-          <h2>{faxTemplateContent.companyName}</h2>
-          <p>{faxTemplateContent.address}</p>
-          <p>{faxTemplateContent.phoneAndFax}</p>
+          <h2>{content.companyName}</h2>
+          <p>{content.address}</p>
+          <p>{content.phoneAndFax}</p>
         </section>
       </article>
     </main>
