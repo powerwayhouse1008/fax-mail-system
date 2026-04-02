@@ -5,9 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 
 type AuthGuardProps = {
   children: ReactNode;
+  requiredRole?: "admin" | "user";
 };
 
-export default function AuthGuard({ children }: AuthGuardProps) {
+export default function AuthGuard({ children, requiredRole }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
@@ -23,6 +24,17 @@ export default function AuthGuard({ children }: AuthGuardProps) {
         router.replace(`/?next=${encodeURIComponent(pathname || "/dashboard")}`);
         return;
       }
+       const payload = (await response.json()) as {
+        user?: {
+          role?: "admin" | "user";
+        };
+      };
+
+      if (requiredRole && payload.user?.role !== requiredRole) {
+        router.replace("/dashboard");
+        return;
+      }
+
 
       setAuthorized(true);
     };
@@ -32,7 +44,8 @@ export default function AuthGuard({ children }: AuthGuardProps) {
     return () => {
       mounted = false;
     };
-  }, [pathname, router]);
+  }, [pathname, requiredRole, router]);
+
 
   if (!authorized) {
     return (
