@@ -1,7 +1,6 @@
 import Link from "next/link";
 
-const features = ["FAX一括送信", "Gmail配信", "名刺アップロード", "送信履歴管理"];
-
+const features = ["FAX一括送信", "Gmail配信", "名刺アップロード", "送信履歴管理", "Adminアカウント管理"];
 export default function HomePage() {
   return (
     <main className="home-shell">
@@ -26,6 +25,9 @@ export default function HomePage() {
           </Link>
           <Link href="/campaigns" className="btn btn-secondary">
             キャンペーン作成
+          </Link>
+          <Link href="/admin" className="btn btn-secondary">
+            Adminホーム
           </Link>
         </div>
       </section>
