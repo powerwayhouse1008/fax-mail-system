@@ -667,3 +667,22 @@ body {
     flex-direction: column;
   }
 }
+.login-card {
+  width: min(520px, 100%);
+}
+
+.account-row {
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  padding: 0.65rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.account-row span {
+  display: block;
+  color: #475569;
+  margin-top: 0.2rem;
+}
