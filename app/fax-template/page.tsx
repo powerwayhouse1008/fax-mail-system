@@ -28,7 +28,15 @@ type FaxTemplateContent = {
   address: string;
   phoneAndFax: string;
 };
-
+type SavedDraft = {
+  content?: Partial<FaxTemplateContent>;
+  uploadedCard?: {
+    name: string;
+    type: string;
+    dataUrl: string;
+  };
+  savedAt?: string;
+};
 const channelLabels: Record<string, string> = {
   fax: "FAX一括送信",
   gmail: "Gmail配信",
@@ -86,9 +94,14 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
     }
 
     try {
-      const parsed = JSON.parse(savedDraft) as { content?: Partial<FaxTemplateContent>; savedAt?: string };
+       const parsed = JSON.parse(savedDraft) as SavedDraft;
       if (parsed.content) {
         setContent((prev) => ({ ...prev, ...parsed.content }));
+      }
+    if (parsed.uploadedCard) {
+        setUploadedCardName(parsed.uploadedCard.name);
+        setUploadedCardType(parsed.uploadedCard.type);
+        setUploadedCardUrl(parsed.uploadedCard.dataUrl);
       }
       if (parsed.savedAt) {
         const formatted = new Intl.DateTimeFormat("ja-JP", {
@@ -105,18 +118,24 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
     }
   }, [channel]);
 
-  useEffect(() => {
-    return () => {
-      if (uploadedCardUrl) {
-        URL.revokeObjectURL(uploadedCardUrl);
-      }
-    };
-  }, [uploadedCardUrl]);
-    const handleSaveDraft = () => {
+ const handleSaveDraft = () => {
     const storageKey = `fax-template-draft:${channel}`;
     const savedAt = new Date().toISOString();
 
-    window.localStorage.setItem(storageKey, JSON.stringify({ content, savedAt }));
+    window.localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        content,
+        uploadedCard: uploadedCardUrl
+          ? {
+              name: uploadedCardName,
+              type: uploadedCardType,
+              dataUrl: uploadedCardUrl,
+            }
+          : null,
+        savedAt,
+      }),
+    );
 
     const formatted = new Intl.DateTimeFormat("ja-JP", {
       year: "numeric",
@@ -139,16 +158,17 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       return;
     }
 
-    setUploadedCardName(file.name);
-    setUploadedCardType(file.type);
-
-    const nextUrl = URL.createObjectURL(file);
-    setUploadedCardUrl((prev) => {
-      if (prev) {
-        URL.revokeObjectURL(prev);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== "string") {
+        return;
       }
-      return nextUrl;
-    });
+      setUploadedCardName(file.name);
+      setUploadedCardType(file.type);
+      setUploadedCardUrl(result);
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
