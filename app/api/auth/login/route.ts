@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ADMIN_CREDENTIAL, AUTH_COOKIE_NAME } from "../../../lib/auth";
 import { createSessionToken } from "../../../lib/server/session";
-import { readUsers } from "../../../lib/server/user-store";
+import { readUsers, verifyPassword } from "../../../lib/server/user-store";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { username?: string; password?: string };
@@ -32,9 +32,9 @@ export async function POST(request: Request) {
   }
 
   const users = await readUsers();
-  const matched = users.find((user) => user.username === username && user.password === password);
+  const matched = users.find((user) => user.username === username);
 
-  if (!matched) {
+   if (!matched || !(await verifyPassword(password, matched.password))) {
     return NextResponse.json({ message: "ID・パスワードを間違いました" }, { status: 401 });
   }
 
