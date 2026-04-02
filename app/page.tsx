@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ADMIN_CREDENTIAL,
   AUTH_COOKIE_NAME,
   AUTH_SESSION_STORAGE_KEY,
   DEFAULT_USER_ACCOUNTS,
@@ -39,20 +40,24 @@ export default function HomePage() {
     }
 
     const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
-   const accounts: UserAccount[] = accountsJson
+    const accounts: UserAccount[] = accountsJson
       ? JSON.parse(accountsJson)
       : DEFAULT_USER_ACCOUNTS;
 
-        const matchedAccount = accounts.find(
+  const matchedAccount = accounts.find(
       (account) => account.username === username && account.password === password,
     );
-
-    if (!matchedAccount) {
+    const isAdminCredentialMatch =
+      username === ADMIN_CREDENTIAL.username && password === ADMIN_CREDENTIAL.password;
+    if (!matchedAccount && !isAdminCredentialMatch) {
       setError("ID・パスワードを間違いました");
       return;
     }
 
-    window.localStorage.setItem(AUTH_SESSION_STORAGE_KEY, matchedAccount.username);
+     window.localStorage.setItem(
+      AUTH_SESSION_STORAGE_KEY,
+      matchedAccount?.username ?? ADMIN_CREDENTIAL.username,
+    );
     document.cookie = `${AUTH_COOKIE_NAME}=1; path=/; max-age=${60 * 60 * 12}; samesite=lax`;
 
     const nextUrl = new URLSearchParams(window.location.search).get("next") || "/dashboard";
