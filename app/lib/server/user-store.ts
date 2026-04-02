@@ -70,12 +70,13 @@ async function supabaseRequest<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 function mapRowToAccount(row: UserRow): UserAccount {
-  const username = row.username || row["username unique"] || "";
+  const username = row.username || row["username unique"] || row.name || "";
+  const fallbackName = row["username unique"] || row.username || username;
   return {
      id: String(row.id),
     username,
     password: row.password_hash,
-     name: row.name || username,
+    name: row.name || fallbackName,
     createdAt: row.created_at,
   };
 }
