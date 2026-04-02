@@ -22,7 +22,7 @@ export function middleware(request: NextRequest) {
  
 
   const authCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  if (authCookie === "1") {
+  if (authCookie) {
     return NextResponse.next();
   }
 
