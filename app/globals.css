@@ -313,6 +313,25 @@ body {
   border-color: #3b82f6;
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.16);
 }
+.gmail-body-editor {
+  min-height: 140px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.58rem 0.66rem;
+  background: #fff;
+  line-height: 1.6;
+}
+
+.gmail-body-editor:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.16);
+}
+
+.gmail-body-editor:empty::before {
+  content: "本文を入力し、画像を貼り付けできます";
+  color: #94a3b8;
+}
 
 .fax-header {
   display: flex;
@@ -428,11 +447,21 @@ body {
   border: 0;
   border-top: 1px dashed #cbd5e1;
 }
+.gmail-preview-message img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
 
 .gmail-preview-body pre {
   margin: 0;
   font: inherit;
   white-space: pre-wrap;
+}
+
+.gmail-attachments-preview {
+  margin-top: 0.8rem;
+  color: #334155;
 }
 @media (max-width: 640px) {
   .editor-grid {
