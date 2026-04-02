@@ -61,6 +61,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   const [uploadedCardName, setUploadedCardName] = useState("");
   const [uploadedCardUrl, setUploadedCardUrl] = useState("");
   const [uploadedCardType, setUploadedCardType] = useState("");
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
    const sentAtDate = useMemo(() => {
     return new Intl.DateTimeFormat("ja-JP", {
@@ -75,13 +76,59 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
     setContent((prev) => ({ ...prev, [key]: value }));
   };
      const isGmailChannel = channel === "gmail";
- useEffect(() => {
+
+  useEffect(() => {
+    const storageKey = `fax-template-draft:${channel}`;
+    const savedDraft = window.localStorage.getItem(storageKey);
+
+    if (!savedDraft) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedDraft) as { content?: Partial<FaxTemplateContent>; savedAt?: string };
+      if (parsed.content) {
+        setContent((prev) => ({ ...prev, ...parsed.content }));
+      }
+      if (parsed.savedAt) {
+        const formatted = new Intl.DateTimeFormat("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(parsed.savedAt));
+        setSaveMessage(`保存済みデータを読み込みました（${formatted}）。`);
+      }
+    } catch {
+      setSaveMessage("保存済みデータの読み込みに失敗しました。");
+    }
+  }, [channel]);
+
+  useEffect(() => {
     return () => {
       if (uploadedCardUrl) {
         URL.revokeObjectURL(uploadedCardUrl);
       }
     };
   }, [uploadedCardUrl]);
+    const handleSaveDraft = () => {
+    const storageKey = `fax-template-draft:${channel}`;
+    const savedAt = new Date().toISOString();
+
+    window.localStorage.setItem(storageKey, JSON.stringify({ content, savedAt }));
+
+    const formatted = new Intl.DateTimeFormat("ja-JP", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(savedAt));
+
+    setSaveMessage(`入力内容を保存しました（${formatted}）。`);
+  };
+
 
   const handleBusinessCardChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -242,10 +289,18 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
           </div>
         )}
         <div className="editor-actions">
+          <button type="button" className="btn btn-secondary" onClick={handleSaveDraft}>
+            入力内容を保存
+          </button>
           <Link href={`/recipient-list?channel=${channel}`} className="btn btn-primary">
             順次送信リスト
           </Link>
         </div>
+        {saveMessage ? (
+          <p className="send-notice send-notice-success" role="status" aria-live="polite">
+            {saveMessage}
+          </p>
+        ) : null}
       </article>
       
       <article className="fax-sheet">
