@@ -2,7 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { DEFAULT_USER_ACCOUNTS, type UserAccount } from "../auth";
 
 type UserRow = {
-  id: string;
+  id: string | number;
   username: string;
   password_hash: string;
   name: string | null;
@@ -65,7 +65,7 @@ async function supabaseRequest<T>(path: string, init?: RequestInit): Promise<T> 
 
 function mapRowToAccount(row: UserRow): UserAccount {
   return {
-    id: row.id,
+     id: String(row.id),
     username: row.username,
     password: row.password_hash,
     name: row.name || row.username,
@@ -169,7 +169,6 @@ async function seedDefaultUsersIfNeeded(): Promise<void> {
 
   const defaultRows = await Promise.all(
     DEFAULT_USER_ACCOUNTS.map(async (account) => ({
-      id: account.id,
       username: account.username,
       password_hash: await hashPassword(account.password),
       name: account.name || account.username,
