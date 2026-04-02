@@ -28,11 +28,11 @@ function getSupabaseConfig() {
     throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.");
   }
 }
-return {
+  return {
     supabaseUrl,
     serviceRoleKey,
   };
-
+}
 async function supabaseRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const { supabaseUrl, serviceRoleKey } = getSupabaseConfig();
   const response = await fetch(`${supabaseUrl}/rest/v1${path}`, {
@@ -175,10 +175,7 @@ export async function updateUser(input: {
   });
 }
 
-export async function writeUsers(accounts: UserAccount[]): Promise<void> {
-  await ensureUsersFile();
-  await fs.writeFile(USERS_FILE, JSON.stringify(normalizeAccounts(accounts), null, 2), "utf-8");
-  export async function deleteUser(id: string): Promise<void> {
+export async function deleteUser(id: string): Promise<void> {
   await supabaseRequest<unknown>(`/users?id=eq.${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: { Prefer: "return=minimal" },
