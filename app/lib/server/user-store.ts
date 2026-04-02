@@ -61,7 +61,12 @@ async function supabaseRequest<T>(path: string, init?: RequestInit): Promise<T> 
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  const rawBody = await response.text();
+  if (!rawBody.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(rawBody) as T;
 }
 
 function mapRowToAccount(row: UserRow): UserAccount {
