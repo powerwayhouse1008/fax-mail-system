@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type FaxTemplatePageProps = {
@@ -28,8 +28,14 @@ type FaxTemplateContent = {
   address: string;
   phoneAndFax: string;
 };
+gmailAttachments?: {
+    name: string;
+    type: string;
+    dataUrl: string;
+  }[];
 type SavedDraft = {
   content?: Partial<FaxTemplateContent>;
+  messageBodyHtml?: string;
   uploadedCard?: {
     name: string;
     type: string;
@@ -69,6 +75,11 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   const [uploadedCardName, setUploadedCardName] = useState("");
   const [uploadedCardUrl, setUploadedCardUrl] = useState("");
   const [uploadedCardType, setUploadedCardType] = useState("");
+   const [gmailAttachments, setGmailAttachments] = useState<
+    { name: string; type: string; dataUrl: string }[]
+  >([]);
+  const [messageBodyHtml, setMessageBodyHtml] = useState(faxTemplateContent.messageBody);
+  const gmailBodyEditorRef = useRef<HTMLDivElement | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
    const sentAtDate = useMemo(() => {
@@ -85,6 +96,37 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   };
      const isGmailChannel = channel === "gmail";
 
+  const addInlineImageToBody = (dataUrl: string) => {
+    if (!gmailBodyEditorRef.current) {
+      return;
+    }
+    const editor = gmailBodyEditorRef.current;
+    const selection = window.getSelection();
+    const imageNode = document.createElement("img");
+    imageNode.src = dataUrl;
+    imageNode.alt = "貼り付け画像";
+    imageNode.style.maxWidth = "100%";
+    imageNode.style.height = "auto";
+    imageNode.style.margin = "0.35rem 0";
+    imageNode.style.borderRadius = "8px";
+
+    if (!selection || selection.rangeCount === 0 || !editor.contains(selection.anchorNode)) {
+      editor.appendChild(imageNode);
+      editor.appendChild(document.createElement("br"));
+      setMessageBodyHtml(editor.innerHTML);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(imageNode);
+    range.setStartAfter(imageNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    setMessageBodyHtml(editor.innerHTML);
+  };
+
   useEffect(() => {
     const storageKey = `fax-template-draft:${channel}`;
     const savedDraft = window.localStorage.getItem(storageKey);
@@ -98,10 +140,18 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       if (parsed.content) {
         setContent((prev) => ({ ...prev, ...parsed.content }));
       }
-    if (parsed.uploadedCard) {
+   if (parsed.messageBodyHtml) {
+        setMessageBodyHtml(parsed.messageBodyHtml);
+      } else if (parsed.content?.messageBody) {
+        setMessageBodyHtml(parsed.content.messageBody);
+      }
+      if (parsed.uploadedCard) {
         setUploadedCardName(parsed.uploadedCard.name);
         setUploadedCardType(parsed.uploadedCard.type);
         setUploadedCardUrl(parsed.uploadedCard.dataUrl);
+      }
+    if (parsed.gmailAttachments) {
+        setGmailAttachments(parsed.gmailAttachments);
       }
       if (parsed.savedAt) {
         const formatted = new Intl.DateTimeFormat("ja-JP", {
@@ -117,6 +167,14 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       setSaveMessage("保存済みデータの読み込みに失敗しました。");
     }
   }, [channel]);
+useEffect(() => {
+    if (!isGmailChannel || !gmailBodyEditorRef.current) {
+      return;
+    }
+    if (gmailBodyEditorRef.current.innerHTML !== messageBodyHtml) {
+      gmailBodyEditorRef.current.innerHTML = messageBodyHtml;
+    }
+  }, [isGmailChannel, messageBodyHtml]);
 
  const handleSaveDraft = () => {
     const storageKey = `fax-template-draft:${channel}`;
@@ -126,6 +184,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       storageKey,
       JSON.stringify({
         content,
+        messageBodyHtml,
         uploadedCard: uploadedCardUrl
           ? {
               name: uploadedCardName,
@@ -133,6 +192,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
               dataUrl: uploadedCardUrl,
             }
           : null,
+         gmailAttachments,
         savedAt,
       }),
     );
@@ -167,6 +227,54 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       setUploadedCardName(file.name);
       setUploadedCardType(file.type);
       setUploadedCardUrl(result);
+    };
+    reader.readAsDataURL(file);
+  };
+const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) {
+      setGmailAttachments([]);
+      return;
+    }
+
+    Promise.all(
+      files.map(
+        (file) =>
+          new Promise<{ name: string; type: string; dataUrl: string }>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result !== "string") {
+                reject(new Error("invalid file"));
+                return;
+              }
+              resolve({ name: file.name, type: file.type, dataUrl: reader.result });
+            };
+            reader.onerror = () => reject(reader.error ?? new Error("file read failed"));
+            reader.readAsDataURL(file);
+          }),
+      ),
+    )
+      .then((attachments) => setGmailAttachments(attachments))
+      .catch(() => setSaveMessage("添付ファイルの読み込みに失敗しました。"));
+  };
+
+  const handleGmailBodyPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = Array.from(event.clipboardData.items);
+    const imageItem = items.find((item) => item.type.startsWith("image/"));
+    if (!imageItem) {
+      return;
+    }
+    event.preventDefault();
+    const file = imageItem.getAsFile();
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        return;
+      }
+      addInlineImageToBody(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -212,11 +320,34 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
             </label>
             <label className="field">
               <span>本文</span>
-              <textarea
-                value={content.messageBody}
-                onChange={(e) => updateField("messageBody", e.target.value)}
-                rows={6}
+              <div
+                ref={gmailBodyEditorRef}
+                className="gmail-body-editor"
+                contentEditable
+                suppressContentEditableWarning
+                onInput={(e) => {
+                  const nextHtml = e.currentTarget.innerHTML;
+                  setMessageBodyHtml(nextHtml);
+                  updateField("messageBody", e.currentTarget.innerText);
+                }}
+                onPaste={handleGmailBodyPaste}
               />
+              <small>テキスト入力＋画像の貼り付け（Ctrl/Cmd + V）に対応。</small>
+            </label>
+            <label className="field field-full" htmlFor="gmail-attachments">
+              <span>添付ファイル</span>
+              <input
+                id="gmail-attachments"
+                type="file"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                multiple
+                onChange={handleGmailAttachmentChange}
+              />
+              {gmailAttachments.length > 0 ? (
+                <small>{gmailAttachments.length} 件の添付ファイルを選択中</small>
+              ) : (
+                <small>未添付</small>
+              )}
             </label>
             <label className="field">
               <span>署名（固定情報）</span>
@@ -345,9 +476,18 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
               </p>
             </div>
             <div className="gmail-preview-body">
-              <p>{content.messageBody}</p>
+              <div
+                className="gmail-preview-message"
+                dangerouslySetInnerHTML={{ __html: messageBodyHtml || "<p></p>" }}
+              />
               <hr />
               <pre>{content.signature}</pre>
+               <div className="gmail-attachments-preview">
+                <strong>添付ファイル:</strong>{" "}
+                {gmailAttachments.length > 0
+                  ? gmailAttachments.map((file) => file.name).join(", ")
+                  : "（なし）"}
+              </div>
             </div>
           </section>
         ) : (
