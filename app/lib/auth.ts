@@ -3,6 +3,7 @@ export type UserAccount = {
   username: string;
   password: string;
   createdAt: string;
+  name?: string;
 };
 
 export const USER_ACCOUNTS_STORAGE_KEY = "fax_mail_user_accounts";
@@ -14,6 +15,7 @@ export const DEFAULT_USER_ACCOUNTS: UserAccount[] = [
     id: "default-user-1",
     username: "staff",
     password: "123456",
+    name: "Staff",
     createdAt: "2026-04-02T00:00:00.000Z",
   },
 ];
@@ -21,4 +23,8 @@ export const DEFAULT_USER_ACCOUNTS: UserAccount[] = [
 export const ADMIN_CREDENTIAL = {
   username: "admin",
   password: "admin123",
+};
+export type SessionUser = {
+  username: string;
+  role: "admin" | "user";
 };
