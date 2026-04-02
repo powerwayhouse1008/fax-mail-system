@@ -28,14 +28,15 @@ type FaxTemplateContent = {
   address: string;
   phoneAndFax: string;
 };
-gmailAttachments?: {
+
+type SavedDraft = {
+  content?: Partial<FaxTemplateContent>;
+  messageBodyHtml?: string;
+  gmailAttachments?: {
     name: string;
     type: string;
     dataUrl: string;
   }[];
-type SavedDraft = {
-  content?: Partial<FaxTemplateContent>;
-  messageBodyHtml?: string;
   uploadedCard?: {
     name: string;
     type: string;
