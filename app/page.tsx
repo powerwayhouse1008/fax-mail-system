@@ -30,8 +30,14 @@ export default function HomePage() {
     setError("");
 
     const formData = new FormData(event.currentTarget);
-    const username = String(formData.get("username") ?? "").trim();
-    const password = String(formData.get("password") ?? "").trim();
+    const normalizeCredential = (value: FormDataEntryValue | null) =>
+      String(value ?? "")
+        .normalize("NFKC")
+        .trim()
+        .replace(/\u00A0|\u3000/g, " ");
+
+    const username = normalizeCredential(formData.get("username"));
+    const password = normalizeCredential(formData.get("password"));
 
     if (!username || !password) {
       setError("ID.パスワードを入力してください.");
@@ -74,7 +80,15 @@ export default function HomePage() {
         <form className="admin-form" onSubmit={handleLogin}>
           <label className="field">
             <span>ID</span>
-            <input name="username" placeholder="ID" autoComplete="username" required />
+            <input
+              name="username"
+              placeholder="ID"
+              autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+            />
           </label>
           <label className="field">
             <span>パスワード</span>
@@ -83,6 +97,9 @@ export default function HomePage() {
               type="password"
               placeholder="パスワード"
               autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               required
             />
           </label>
