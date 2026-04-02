@@ -31,8 +31,8 @@ export default function AdminHomePage() {
 
     const mapped = payload.users.map((account) => ({
       id: account.id,
-      name: account.name || account.username,
-      loginId: account.username,
+      name: account.name || account.username || "(No name)",
+      loginId: account.username || "(No ID)",
       password: "",
     }));
 
