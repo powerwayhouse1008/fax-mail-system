@@ -24,19 +24,12 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const faxNumbers = useMemo(() => cleanList(faxListInput), [faxListInput]);
   const gmailAddresses = useMemo(() => cleanList(gmailListInput), [gmailListInput]);
   const maxLength = Math.max(faxNumbers.length, gmailAddresses.length);
-const handleSend = () => {
+  
+   const handleSend = () => {
     if (maxLength === 0) {
       setSendMessage({
         type: "error",
         text: "送信先がありません。FAX番号とGmailアドレスを入力してください。",
-      });
-      return;
-    }
-
-    if (faxNumbers.length !== gmailAddresses.length) {
-      setSendMessage({
-        type: "error",
-        text: "FAXとGmailの件数が一致していません。行数をそろえてください。",
       });
       return;
     }
@@ -51,7 +44,7 @@ const handleSend = () => {
     <main className="dashboard-shell">
       <section className="dashboard-card">
         <h1>順次送信リスト</h1>
-        <p>FAX番号とGmailアドレスの一覧を入力してください。上から順に1件ずつ組み合わせます。</p>
+        <p>FAX番号またはGmailアドレスの一覧を入力してください。未入力の項目があっても送信できます。</p>
 
         <div className="recipient-grid">
           <label className="field">
