@@ -229,6 +229,35 @@ body {
   gap: 0.75rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.editor-actions {
+  margin-top: 1rem;
+}
+
+.recipient-grid {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.recipient-preview {
+  margin-top: 1.25rem;
+  border: 1px solid #dbe2ea;
+  border-radius: 12px;
+  padding: 1rem;
+  background: #f8fafc;
+}
+
+.recipient-preview h2 {
+  margin: 0 0 0.75rem;
+}
+
+.recipient-preview ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+}
 
 .field {
   display: grid;
@@ -394,4 +423,7 @@ body {
    .gmail-row-inline {
     grid-template-columns: 1fr;
   }
-}
+.recipient-grid {
+    grid-template-columns: 1fr;
+  }
+  }
