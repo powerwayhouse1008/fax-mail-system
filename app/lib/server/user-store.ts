@@ -27,12 +27,13 @@ function getSupabaseConfig() {
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.");
   }
-}
+
   return {
     supabaseUrl,
     serviceRoleKey,
   };
 }
+
 async function supabaseRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const { supabaseUrl, serviceRoleKey } = getSupabaseConfig();
   const response = await fetch(`${supabaseUrl}/rest/v1${path}`, {
