@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME, type UserAccount } from "../../lib/auth";
 import { verifySessionToken } from "../../lib/server/session";
-import { readUsers, writeUsers } from "../../lib/server/user-store";
-
-const createId = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
+import { createUser, deleteUser, readUsers, updateUser } from "../../lib/server/user-store";
 
 const unauthorized = () => NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
@@ -46,15 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "IDは既に存在します。" }, { status: 409 });
     }
 
-    users.push({
-      id: createId(),
-      username,
-      password,
-      name,
-      createdAt: new Date().toISOString(),
-    });
-
-    await writeUsers(users);
+    await createUser({ username, password, name });
     return NextResponse.json({ ok: true });
   }
 
@@ -68,39 +55,41 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ message: "ユーザーが見つかりません。" }, { status: 404 });
     }
+    let username: string | undefined;
+    let password: string | undefined;
+    let name: string | undefined;
 
     if (payload.username !== undefined) {
-      const username = String(payload.username).trim();
+       username = String(payload.username).trim();
       if (!username) return NextResponse.json({ message: "IDは必須です。" }, { status: 400 });
       const duplicate = users.find((item) => item.username === username && item.id !== targetId);
       if (duplicate) return NextResponse.json({ message: "IDは既に存在します。" }, { status: 409 });
-      user.username = username;
     }
 
     if (payload.password !== undefined) {
-      const password = String(payload.password).trim();
+       password = String(payload.password).trim();
       if (!password) {
         return NextResponse.json({ message: "パスワードは必須です。" }, { status: 400 });
       }
-      user.password = password;
+     
     }
 
     if (payload.name !== undefined) {
-      user.name = String(payload.name).trim() || user.username;
+       name = String(payload.name).trim() || username || user.username;
     }
 
-    await writeUsers(users);
+   await updateUser({ id: targetId, username, password, name });
     return NextResponse.json({ ok: true });
   }
 
   if (action === "delete") {
     const targetId = String(payload.id ?? "").trim();
-    const nextUsers = users.filter((item) => item.id !== targetId);
-    if (nextUsers.length === users.length) {
+     const targetExists = users.some((item) => item.id === targetId);
+    if (!targetExists) {
       return NextResponse.json({ message: "ユーザーが見つかりません。" }, { status: 404 });
     }
 
-    await writeUsers(nextUsers);
+    await deleteUser(targetId);
     return NextResponse.json({ ok: true });
   }
 
