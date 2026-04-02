@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
  
-  if (authCookie) {
+
   const authCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   if (authCookie === "1") {
     return NextResponse.next();
