@@ -1,30 +1,82 @@
-import Link from "next/link";
+"use client";
 
-const features = ["FAX一括送信", "Gmail配信", "名刺アップロード", "送信履歴管理", "Adminアカウント管理"];
+import Link from "next/link";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  AUTH_COOKIE_NAME,
+  AUTH_SESSION_STORAGE_KEY,
+  DEFAULT_USER_ACCOUNTS,
+  USER_ACCOUNTS_STORAGE_KEY,
+  type UserAccount,
+} from "./lib/auth";
+
 export default function HomePage() {
+   const router = useRouter();
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
+    if (!accountsJson) {
+      window.localStorage.setItem(USER_ACCOUNTS_STORAGE_KEY, JSON.stringify(DEFAULT_USER_ACCOUNTS));
+    }
+  }, []);
+
+  const handleLogin = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+
+    const formData = new FormData(event.currentTarget);
+    const username = String(formData.get("username") ?? "").trim();
+    const password = String(formData.get("password") ?? "").trim();
+
+    if (!username || !password) {
+      setError("ID.パスワードを入力してください.");
+      return;
+    }
+
+    const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
+    const accounts: UserAccount[] = accountsJson ? JSON.parse(accountsJson) : DEFAULT_USER_ACCOUNTS;
+
+        const matchedAccount = accounts.find((account) => account.username === username && account.password === password);
+
+    if (!matchedAccount) {
+      setError("ID・パスワードを間違いました");
+      return;
+    }
+
+    window.localStorage.setItem(AUTH_SESSION_STORAGE_KEY, matchedAccount.username);
+    document.cookie = `${AUTH_COOKIE_NAME}=1; path=/; max-age=${60 * 60 * 12}; samesite=lax`;
+
+    const nextUrl = new URLSearchParams(window.location.search).get("next") || "/dashboard";
+    router.push(nextUrl);
+  };
+
   return (
     <main className="home-shell">
-      <section className="hero-card">
-        <p className="badge">日本語版スターター</p>
-
-        <h1>FAX・Gmail一括送信システム</h1>
+      <section className="hero-card login-card">
+        <p className="badge">Adminロクイン</p>
+        <h1>FAX & Gmail Portal</h1>
 
         <p className="description">
-          Next.js + Supabase を前提にした、FAX送信・メール送信・履歴管理の初期構成です。
+        FAX送信・メール送信・履歴管理の初期構成です。
         </p>
-       
-        <ul className="feature-list" aria-label="主な機能">
-          {features.map((feature) => (
-            <li key={feature}>{feature}</li>
-          ))}
-        </ul>
+       <form className="admin-form" onSubmit={handleLogin}>
+          <label className="field">
+            <span>ID</span>
+            <input name="username" placeholder="ID" autoComplete="username" required />
+          </label>
+          <label className="field">
+            <span>パスワード</span>
+            <input name="password" type="password" placeholder="パスワード" autoComplete="current-password" required />
+          </label>
+          {error ? <p className="send-notice send-notice-error">{error}</p> : null}
+          <button className="btn btn-primary" type="submit">
+            ログイン
+          </button>
+        </form>
 
         <div className="actions">
-          <Link href="/dashboard" className="btn btn-primary">
-            ダッシュボードへ
-          </Link>
-          <Link href="/campaigns" className="btn btn-secondary">
-            キャンペーン作成
           </Link>
           <Link href="/admin" className="btn btn-secondary">
             Adminホーム
