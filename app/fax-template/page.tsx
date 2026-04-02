@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type FaxTemplatePageProps = {
   searchParams?: {
@@ -233,6 +234,11 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
             </label>
           </div>
         )}
+        <div className="editor-actions">
+          <Link href={`/recipient-list?channel=${channel}`} className="btn btn-primary">
+            次: 送るニット
+          </Link>
+        </div>
       </article>
       
       <article className="fax-sheet">
