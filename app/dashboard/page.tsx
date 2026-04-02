@@ -3,12 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AuthGuard from "../components/auth-guard";
-import { useMemo } from "react";
-import {
-  ADMIN_CREDENTIAL,
-  AUTH_COOKIE_NAME,
-  AUTH_SESSION_STORAGE_KEY,
-} from "../lib/auth";
+import { useEffect, useMemo, useState } from "react";
+import type { SessionUser } from "../lib/auth";
 
 const actions = [
    
@@ -33,18 +29,30 @@ const actions = [
 ];
 
 export default function DashboardPage() {
-    const router = useRouter();
+   const router = useRouter();
+  const [session, setSession] = useState<SessionUser | null>(null);
 
-  const isAdmin = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return (
-      window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY) === ADMIN_CREDENTIAL.username
-    );
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSession = async () => {
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      if (!response.ok || !mounted) return;
+
+      const payload = (await response.json()) as { user: SessionUser };
+      setSession(payload.user);
+    };
+
+    loadSession();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const dashboardActions = useMemo(
     () =>
-      isAdmin
+     session?.role === "admin"
         ? [
             ...actions,
             {
@@ -55,13 +63,11 @@ export default function DashboardPage() {
             },
           ]
         : actions,
-    [isAdmin],
+     [session?.role],
   );
 
-
-  const handleLogout = () => {
-    window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
-    document.cookie = `${AUTH_COOKIE_NAME}=; path=/; max-age=0; samesite=lax`;
+const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
   };
 
