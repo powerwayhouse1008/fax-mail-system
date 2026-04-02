@@ -115,6 +115,20 @@ export default function AdminHomePage() {
 
     event.currentTarget.reset();
   };
+const handleDeleteSubAccount = (subAccountId: string) => {
+    if (!selectedAccount) return;
+
+    setAccounts((prev) =>
+      prev.map((account) =>
+        account.id === selectedAccount.id
+          ? {
+              ...account,
+              subAccounts: account.subAccounts.filter((subAccount) => subAccount.id !== subAccountId),
+            }
+          : account,
+      ),
+    );
+  };
 
   const handleSaveStorage = () => {
     if (!selectedAccount) return;
@@ -203,6 +217,7 @@ export default function AdminHomePage() {
                       <th>従業員</th>
                       <th>Email</th>
                       <th>部署</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -211,6 +226,15 @@ export default function AdminHomePage() {
                         <td>{subAccount.employeeName}</td>
                         <td>{subAccount.email}</td>
                         <td>{subAccount.department || "-"}</td>
+                         <td>
+                          <button
+                            className="btn btn-secondary"
+                            type="button"
+                            onClick={() => handleDeleteSubAccount(subAccount.id)}
+                          >
+                            削除
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
