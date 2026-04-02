@@ -12,13 +12,16 @@ import {
 } from "./lib/auth";
 
 export default function HomePage() {
-   const router = useRouter();
+  const router = useRouter();
   const [error, setError] = useState("");
 
   useEffect(() => {
     const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
     if (!accountsJson) {
-      window.localStorage.setItem(USER_ACCOUNTS_STORAGE_KEY, JSON.stringify(DEFAULT_USER_ACCOUNTS));
+     window.localStorage.setItem(
+        USER_ACCOUNTS_STORAGE_KEY,
+        JSON.stringify(DEFAULT_USER_ACCOUNTS),
+      );
     }
   }, []);
 
@@ -36,9 +39,13 @@ export default function HomePage() {
     }
 
     const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
-    const accounts: UserAccount[] = accountsJson ? JSON.parse(accountsJson) : DEFAULT_USER_ACCOUNTS;
+   const accounts: UserAccount[] = accountsJson
+      ? JSON.parse(accountsJson)
+      : DEFAULT_USER_ACCOUNTS;
 
-        const matchedAccount = accounts.find((account) => account.username === username && account.password === password);
+        const matchedAccount = accounts.find(
+      (account) => account.username === username && account.password === password,
+    );
 
     if (!matchedAccount) {
       setError("ID・パスワードを間違いました");
@@ -56,19 +63,23 @@ export default function HomePage() {
     <main className="home-shell">
       <section className="hero-card login-card">
         <p className="badge">Adminロクイン</p>
-        <h1>FAX & Gmail Portal</h1>
+        <h1>FAX &amp; Gmail Portal</h1>
 
-        <p className="description">
-        FAX送信・メール送信・履歴管理の初期構成です。
-        </p>
-       <form className="admin-form" onSubmit={handleLogin}>
+        <p className="description">FAX送信・メール送信・履歴管理の初期構成です。</p>
+        <form className="admin-form" onSubmit={handleLogin}>
           <label className="field">
             <span>ID</span>
             <input name="username" placeholder="ID" autoComplete="username" required />
           </label>
           <label className="field">
             <span>パスワード</span>
-            <input name="password" type="password" placeholder="パスワード" autoComplete="current-password" required />
+             <input
+              name="password"
+              type="password"
+              placeholder="パスワード"
+              autoComplete="current-password"
+              required
+            />
           </label>
           {error ? <p className="send-notice send-notice-error">{error}</p> : null}
           <button className="btn btn-primary" type="submit">
@@ -77,7 +88,6 @@ export default function HomePage() {
         </form>
 
         <div className="actions">
-          </Link>
           <Link href="/admin" className="btn btn-secondary">
             Adminホーム
           </Link>
