@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -19,7 +18,7 @@ export default function HomePage() {
   useEffect(() => {
     const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
     if (!accountsJson) {
-     window.localStorage.setItem(
+      window.localStorage.setItem(
         USER_ACCOUNTS_STORAGE_KEY,
         JSON.stringify(DEFAULT_USER_ACCOUNTS),
       );
@@ -44,7 +43,7 @@ export default function HomePage() {
       ? JSON.parse(accountsJson)
       : DEFAULT_USER_ACCOUNTS;
 
-  const matchedAccount = accounts.find(
+   const matchedAccount = accounts.find(
       (account) => account.username === username && account.password === password,
     );
     const isAdminCredentialMatch =
@@ -60,7 +59,8 @@ export default function HomePage() {
     );
     document.cookie = `${AUTH_COOKIE_NAME}=1; path=/; max-age=${60 * 60 * 12}; samesite=lax`;
 
-    const nextUrl = new URLSearchParams(window.location.search).get("next") || "/dashboard";
+    const nextUrl =
+      new URLSearchParams(window.location.search).get("next") || "/dashboard";
     router.push(nextUrl);
   };
 
@@ -91,12 +91,6 @@ export default function HomePage() {
             ログイン
           </button>
         </form>
-
-        <div className="actions">
-          <Link href="/admin" className="btn btn-secondary">
-            Adminホーム
-          </Link>
-        </div>
       </section>
     </main>
   );
