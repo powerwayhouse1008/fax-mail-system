@@ -1,4 +1,4 @@
-
+import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { DEFAULT_USER_ACCOUNTS, type UserAccount } from "../auth";
 
 type UserRow = {
@@ -11,6 +11,7 @@ type UserRow = {
 
 const normalizeText = (value: string) => value.trim();
 let hasSeededDefaultUsers = false;
+const LOCAL_HASH_SCHEME = "scrypt_v1";
 
 const normalizeAccounts = (accounts: UserAccount[]) =>
   accounts.map((account) => ({
@@ -73,24 +74,84 @@ function mapRowToAccount(row: UserRow): UserAccount {
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  const data = await supabaseRequest<string>("/rpc/hash_password", {
-    method: "POST",
-    body: JSON.stringify({ plain_password: normalizeText(password) }),
-  });
+  const normalizedPassword = normalizeText(password);
 
-  return data;
+  try {
+    const data = await supabaseRequest<string>("/rpc/hash_password", {
+      method: "POST",
+      body: JSON.stringify({ plain_password: normalizedPassword }),
+    });
+
+    return data;
+  } catch (error) {
+    if (!isMissingSupabaseRpc(error)) {
+      throw error;
+    }
+
+
+   return hashPasswordLocally(normalizedPassword);
+  }
 }
 
 export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
-  const data = await supabaseRequest<boolean>("/rpc/verify_password", {
-    method: "POST",
-    body: JSON.stringify({
-      plain_password: normalizeText(password),
-      stored_hash: passwordHash,
-    }),
-  });
+  const normalizedPassword = normalizeText(password);
 
-  return Boolean(data);
+  if (isLocalPasswordHash(passwordHash)) {
+    return verifyLocalPassword(normalizedPassword, passwordHash);
+  }
+
+  try {
+    const data = await supabaseRequest<boolean>("/rpc/verify_password", {
+      method: "POST",
+      body: JSON.stringify({
+        plain_password: normalizedPassword,
+        stored_hash: passwordHash,
+      }),
+    });
+
+    return Boolean(data);
+  } catch (error) {
+    if (!isMissingSupabaseRpc(error)) {
+      throw error;
+    }
+
+    return verifyLocalPassword(normalizedPassword, passwordHash);
+  }
+}
+
+function isMissingSupabaseRpc(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  return (
+    error.message.includes("PGRST202") &&
+    (error.message.includes("/rpc/hash_password") || error.message.includes("/rpc/verify_password"))
+  );
+}
+
+function isLocalPasswordHash(value: string): boolean {
+  return value.startsWith(`${LOCAL_HASH_SCHEME}$`);
+}
+
+function hashPasswordLocally(password: string): string {
+  const salt = randomBytes(16);
+  const derivedKey = scryptSync(password, salt, 64);
+  return `${LOCAL_HASH_SCHEME}$${salt.toString("hex")}$${derivedKey.toString("hex")}`;
+}
+
+function verifyLocalPassword(password: string, storedHash: string): boolean {
+  const [scheme, saltHex, hashHex] = storedHash.split("$");
+  if (!scheme || !saltHex || !hashHex || scheme !== LOCAL_HASH_SCHEME) {
+    return false;
+  }
+
+  const salt = Buffer.from(saltHex, "hex");
+  const expectedHash = Buffer.from(hashHex, "hex");
+  const actualHash = scryptSync(password, salt, expectedHash.length);
+
+  if (actualHash.length !== expectedHash.length) return false;
+
+  return timingSafeEqual(actualHash, expectedHash);
+
 }
 
 async function seedDefaultUsersIfNeeded(): Promise<void> {
