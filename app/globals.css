@@ -614,6 +614,12 @@ body {
   display: grid;
   gap: 0.5rem;
 }
+account-list-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  align-items: stretch;
+}
 
 .account-item {
   width: 100%;
@@ -635,6 +641,9 @@ body {
 .account-item span,
 .account-item small {
   color: #475569;
+}
+.account-delete-btn {
+  padding-inline: 0.85rem;
 }
 
 .subaccount-table {
