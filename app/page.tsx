@@ -1,73 +1,41 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ADMIN_CREDENTIAL,
-  AUTH_COOKIE_NAME,
-  AUTH_SESSION_STORAGE_KEY,
-  DEFAULT_USER_ACCOUNTS,
-  USER_ACCOUNTS_STORAGE_KEY,
-  type UserAccount,
-} from "./lib/auth";
 
 export default function HomePage() {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
-    if (!accountsJson) {
-      window.localStorage.setItem(
-        USER_ACCOUNTS_STORAGE_KEY,
-        JSON.stringify(DEFAULT_USER_ACCOUNTS),
-      );
-    }
-  }, []);
 
-  const handleLogin = (event: FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    setLoading(true);
+    try {
+      const formData = new FormData(event.currentTarget);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: formData.get("username"),
+          password: formData.get("password"),
+        }),
+      });
 
-    const formData = new FormData(event.currentTarget);
-    const normalizeCredential = (value: FormDataEntryValue | null) =>
-      String(value ?? "")
-        .normalize("NFKC")
-        .trim()
-        .replace(/\u00A0|\u3000/g, " ");
+    if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        setError(payload?.message ?? "ログインに失敗しました。");
+        return;
+      }
 
-    const username = normalizeCredential(formData.get("username"));
-    const password = normalizeCredential(formData.get("password"));
-
-    if (!username || !password) {
-      setError("ID.パスワードを入力してください.");
-      return;
+   const nextUrl =
+        new URLSearchParams(window.location.search).get("next") || "/dashboard";
+      router.push(nextUrl);
+    } finally {
+      setLoading(false);
     }
-
-    const accountsJson = window.localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
-    const accounts: UserAccount[] = accountsJson
-      ? JSON.parse(accountsJson)
-      : DEFAULT_USER_ACCOUNTS;
-
-   const matchedAccount = accounts.find(
-      (account) => account.username === username && account.password === password,
-    );
-    const isAdminCredentialMatch =
-      username === ADMIN_CREDENTIAL.username && password === ADMIN_CREDENTIAL.password;
-    if (!matchedAccount && !isAdminCredentialMatch) {
-      setError("ID・パスワードを間違いました");
-      return;
-    }
-
-     window.localStorage.setItem(
-      AUTH_SESSION_STORAGE_KEY,
-      matchedAccount?.username ?? ADMIN_CREDENTIAL.username,
-    );
-    document.cookie = `${AUTH_COOKIE_NAME}=1; path=/; max-age=${60 * 60 * 12}; samesite=lax`;
-
-    const nextUrl =
-      new URLSearchParams(window.location.search).get("next") || "/dashboard";
-    router.push(nextUrl);
   };
 
   return (
@@ -104,8 +72,8 @@ export default function HomePage() {
             />
           </label>
           {error ? <p className="send-notice send-notice-error">{error}</p> : null}
-          <button className="btn btn-primary" type="submit">
-            ログイン
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            {loading ? "Đang đăng nhập..." : "ログイン"}
           </button>
         </form>
       </section>
