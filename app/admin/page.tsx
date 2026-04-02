@@ -123,6 +123,16 @@ export default function AdminHomePage() {
       ),
     );
   };
+   const handleDeleteAccount = (accountId: string) => {
+    setAccounts((prev) => {
+      const remaining = prev.filter((account) => account.id !== accountId);
+      setSelectedAccountId((current) => {
+        if (current !== accountId) return current;
+        return remaining[0]?.id ?? "";
+      });
+      return remaining;
+    });
+  };
 
   return (
     <main className="admin-shell">
@@ -164,7 +174,7 @@ export default function AdminHomePage() {
             <h2>登録済みアカウント一覧</h2>
             <ul className="account-list">
               {accounts.map((account) => (
-                <li key={account.id}>
+                <li key={account.id} className="account-list-item">
                   <button
                     type="button"
                     className={`account-item ${account.id === selectedAccount?.id ? "active" : ""}`}
@@ -172,6 +182,14 @@ export default function AdminHomePage() {
                   >
                     <strong>{account.name}</strong>
                     <span>ID: {account.loginId}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary account-delete-btn"
+                    onClick={() => handleDeleteAccount(account.id)}
+                    aria-label={`${account.name}を削除`}
+                  >
+                    削除
                   </button>
                 </li>
               ))}
