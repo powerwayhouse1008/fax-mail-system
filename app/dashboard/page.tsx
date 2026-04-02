@@ -14,6 +14,12 @@ const actions = [
     href: "/fax-template?channel=gmail",
     cta: "Gmail用テンプレートを作成",
   },
+    {
+    title: "送信履歴管理",
+    description: "FAX・Gmailの送信履歴を一覧で確認します。",
+    href: "/send-history",
+    cta: "送信履歴を確認",
+  },
 ];
 
 export default function DashboardPage() {
