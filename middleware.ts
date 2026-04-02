@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { AUTH_COOKIE_NAME } from "./app/lib/auth";
 
-const AUTH_COOKIE_NAME = "fax_mail_auth";
+
 const protectedPaths = [
   "/dashboard",
   "/fax-template",
@@ -8,6 +9,7 @@ const protectedPaths = [
   "/recipient-list",
   "/send-history",
   "/business-card-upload",
+  "/admin",
 ];
 
 export function middleware(request: NextRequest) {
@@ -17,7 +19,8 @@ export function middleware(request: NextRequest) {
   if (!needsAuth) {
     return NextResponse.next();
   }
-
+ 
+  if (authCookie) {
   const authCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
   if (authCookie === "1") {
     return NextResponse.next();
@@ -36,5 +39,6 @@ export const config = {
     "/recipient-list/:path*",
     "/send-history/:path*",
     "/business-card-upload/:path*",
+    "/admin/:path*",
   ],
 };
