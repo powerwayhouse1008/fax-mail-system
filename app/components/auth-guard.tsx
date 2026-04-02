@@ -13,13 +13,13 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-   let mounted = true;
+    let mounted = true;
     const checkSession = async () => {
       const response = await fetch("/api/auth/session", { cache: "no-store" });
       if (!mounted) return;
-    }
+    
 
-    if (!response.ok) {
+     if (!response.ok) {
         router.replace(`/?next=${encodeURIComponent(pathname || "/dashboard")}`);
         return;
       }
