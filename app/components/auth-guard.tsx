@@ -2,7 +2,6 @@
 
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AUTH_COOKIE_NAME, AUTH_SESSION_STORAGE_KEY } from "../lib/auth";
 
 type AuthGuardProps = {
   children: ReactNode;
@@ -14,15 +13,25 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    const sessionUser = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
-
-    if (!sessionUser) {
-      router.replace(`/?next=${encodeURIComponent(pathname || "/dashboard")}`);
-      return;
+   let mounted = true;
+    const checkSession = async () => {
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      if (!mounted) return;
     }
 
-    document.cookie = `${AUTH_COOKIE_NAME}=1; path=/; max-age=${60 * 60 * 12}; samesite=lax`;
-    setAuthorized(true);
+    if (!response.ok) {
+        router.replace(`/?next=${encodeURIComponent(pathname || "/dashboard")}`);
+        return;
+      }
+
+      setAuthorized(true);
+    };
+
+    checkSession();
+
+    return () => {
+      mounted = false;
+    };
   }, [pathname, router]);
 
   if (!authorized) {
