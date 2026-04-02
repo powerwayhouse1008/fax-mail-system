@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { USER_ACCOUNTS_STORAGE_KEY, type UserAccount } from "../lib/auth";
 
 type PersonalAccount = {
   id: string;
@@ -39,7 +40,26 @@ export default function AdminHomePage() {
 
   useEffect(() => {
     const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
-    if (!raw) return;
+    if (!raw) {
+      const sharedRaw = localStorage.getItem(USER_ACCOUNTS_STORAGE_KEY);
+      if (!sharedRaw) return;
+
+      try {
+        const parsedShared = JSON.parse(sharedRaw) as UserAccount[];
+        if (!Array.isArray(parsedShared) || parsedShared.length === 0) return;
+        const mappedAccounts = parsedShared.map((account) => ({
+          id: account.id,
+          name: account.username.toUpperCase(),
+          loginId: account.username,
+          password: account.password,
+        }));
+        setAccounts(mappedAccounts);
+        setSelectedAccountId(mappedAccounts[0].id);
+      } catch {
+        // ignore broken localStorage data
+      }
+      return;
+    }
 
     try {
       const parsed = JSON.parse(raw) as PersonalAccount[];
@@ -53,6 +73,13 @@ export default function AdminHomePage() {
 
   useEffect(() => {
     localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+    const sharedAccounts: UserAccount[] = accounts.map((account) => ({
+      id: account.id,
+      username: account.loginId,
+      password: account.password,
+      createdAt: new Date().toISOString(),
+    }));
+    localStorage.setItem(USER_ACCOUNTS_STORAGE_KEY, JSON.stringify(sharedAccounts));
   }, [accounts]);
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedAccountId) ?? accounts[0],
@@ -82,7 +109,6 @@ export default function AdminHomePage() {
   };
 
   const updateSelectedAccount = (field: "loginId" | "password", value: string) => {
-    event.preventDefault();
     if (!selectedAccount) return;
 
    
