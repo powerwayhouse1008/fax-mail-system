@@ -236,7 +236,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
         )}
         <div className="editor-actions">
           <Link href={`/recipient-list?channel=${channel}`} className="btn btn-primary">
-            次: 送るニット
+            順次送信リスト
           </Link>
         </div>
       </article>
