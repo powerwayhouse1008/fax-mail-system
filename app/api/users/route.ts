@@ -116,4 +116,4 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : "アカウント操作に失敗しました。";
     return NextResponse.json({ message }, { status: 500 });
   }
-}
+
