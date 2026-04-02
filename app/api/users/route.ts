@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
       if (!username || !password) {
         return NextResponse.json({ message: "IDとパスワードは必須です。" }, { status: 400 });
       }
-    }
 
       if (users.some((user) => user.username === username)) {
         return NextResponse.json({ message: "IDは既に存在します。" }, { status: 409 });
@@ -116,4 +115,4 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : "アカウント操作に失敗しました。";
     return NextResponse.json({ message }, { status: 500 });
   }
-
+}
