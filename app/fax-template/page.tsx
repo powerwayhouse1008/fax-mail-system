@@ -62,7 +62,14 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   const [uploadedCardUrl, setUploadedCardUrl] = useState("");
   const [uploadedCardType, setUploadedCardType] = useState("");
   const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
-   const isFaxChannel = channel === "fax";
+   const sentAtDate = useMemo(() => {
+    return new Intl.DateTimeFormat("ja-JP", {
+      year: "2-digit",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }, []);
+  const isFaxChannel = channel === "fax";
 
   const updateField = <K extends keyof FaxTemplateContent>(key: K, value: FaxTemplateContent[K]) => {
     setContent((prev) => ({ ...prev, [key]: value }));
