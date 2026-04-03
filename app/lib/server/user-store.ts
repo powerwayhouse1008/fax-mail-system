@@ -138,6 +138,9 @@ function isMissingSupabaseRpc(error: unknown): boolean {
     (error.message.includes("/rpc/hash_password") || error.message.includes("/rpc/verify_password"))
   );
 }
+function isMissingColumnError(error: unknown, columnName: string): boolean {
+  return error instanceof Error && error.message.includes(`Could not find the '${columnName}' column`);
+}
 
 function isLocalPasswordHash(value: string): boolean {
   return value.startsWith(`${LOCAL_HASH_SCHEME}$`);
@@ -219,20 +222,39 @@ export async function createUser(input: {
   const username = normalizeText(input.username);
   const passwordHash = await hashPassword(input.password);
   const name = normalizeText(input.name ?? username) || username;
+  const basePayload = {
+    username,
+    password_hash: passwordHash,
+    password: passwordHash,
+    name,
+    created_at: new Date().toISOString(),
+  };
+  const variants = [
+    { ...basePayload, username_unique: username, "username unique": username },
+    { ...basePayload, "username unique": username },
+    { ...basePayload, username_unique: username },
+    basePayload,
+  ];
 
-  await supabaseRequest<unknown>("/users", {
-    method: "POST",
-    body: JSON.stringify({
-      username,
-      username_unique: username,
-      "username unique": username,
-      password_hash: passwordHash,
-      password: passwordHash,
-      name,
-      created_at: new Date().toISOString(),
-    }),
-    headers: { Prefer: "return=minimal" },
-  });
+  let lastError: unknown;
+  for (const variant of variants) {
+    try {
+      await supabaseRequest<unknown>("/users", {
+        method: "POST",
+        body: JSON.stringify(variant),
+        headers: { Prefer: "return=minimal" },
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      const canRetry =
+        isMissingColumnError(error, "username_unique") ||
+        isMissingColumnError(error, "username unique");
+      if (!canRetry) throw error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Failed to create user.");
 }
 
 export async function updateUser(input: {
@@ -248,22 +270,45 @@ export async function updateUser(input: {
 
   if (input.username !== undefined) {
     const normalizedUsername = normalizeText(input.username);
-    payload.username = normalizedUsername;
+    payloadBase.username = normalizedUsername;
     payload.username_unique = normalizedUsername;
     payload["username unique"] = normalizedUsername;
   }
   if (input.password !== undefined) {
     const passwordHash = await hashPassword(input.password);
-    payload.password_hash = passwordHash;
-    payload.password = passwordHash;
+    payloadBase.password_hash = passwordHash;
+    payloadBase.password = passwordHash;
   }
-  if (input.name !== undefined) payload.name = normalizeText(input.name);
+  if (input.name !== undefined) payloadBase.name = normalizeText(input.name);
 
-  await supabaseRequest<unknown>(`/users?id=eq.${encodeURIComponent(input.id)}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-    headers: { Prefer: "return=minimal" },
-  });
+  const usernameValue = payloadBase.username;
+  const variants = usernameValue
+    ? [
+        { ...payloadBase, username_unique: usernameValue, "username unique": usernameValue },
+        { ...payloadBase, "username unique": usernameValue },
+        { ...payloadBase, username_unique: usernameValue },
+        payloadBase,
+      ]
+    : [payloadBase];
+
+  let lastError: unknown;
+  for (const variant of variants) {
+    try {
+      await supabaseRequest<unknown>(`/users?id=eq.${encodeURIComponent(input.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(variant),
+        headers: { Prefer: "return=minimal" },
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      const canRetry =
+        isMissingColumnError(error, "username_unique") ||
+        isMissingColumnError(error, "username unique");
+      if (!canRetry) throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Failed to update user.");
 }
 
 export async function deleteUser(id: string): Promise<void> {
