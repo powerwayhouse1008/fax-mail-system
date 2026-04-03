@@ -228,6 +228,7 @@ export default function AdminHomePage() {
                 <input
                   type={isPasswordVisible ? "text" : "password"}
                   value={selectedAccount.password}
+                  placeholder="未変更の場合は空欄のまま"
                   onChange={(event) => updateSelectedAccount("password", event.target.value)}
                 />
               </label>
