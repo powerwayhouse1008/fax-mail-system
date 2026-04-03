@@ -267,12 +267,10 @@ export async function updateUser(input: {
   const payload: Partial<
     Record<"username" | "username_unique" | "username unique" | "password" | "password_hash" | "name", string>
   > = {};
-
+  let normalizedUsername: string | undefined;
   if (input.username !== undefined) {
-    const normalizedUsername = normalizeText(input.username);
+    normalizedUsername = normalizeText(input.username);
     payload.username = normalizedUsername;
-    payload.username_unique = normalizedUsername;
-    payload["username unique"] = normalizedUsername;
   }
   if (input.password !== undefined) {
     const passwordHash = await hashPassword(input.password);
@@ -281,15 +279,14 @@ export async function updateUser(input: {
   }
   if (input.name !== undefined) payload.name = normalizeText(input.name);
 
-  const usernameValue = payload.username;
-  const variants = usernameValue
+   const variants = normalizedUsername
     ? [
-       { ...payload, username_unique: usernameValue, "username unique": usernameValue },
-        { ...payload, "username unique": usernameValue },
-        { ...payload, username_unique: usernameValue },
+        { ...payload, username_unique: normalizedUsername, "username unique": normalizedUsername },
+        { ...payload, "username unique": normalizedUsername },
+        { ...payload, username_unique: normalizedUsername },
         payload,
       ]
-   : [payload];
+     : [payload];
 
   let lastError: unknown;
   for (const variant of variants) {
