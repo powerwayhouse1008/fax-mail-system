@@ -242,14 +242,9 @@ export async function updateUser(input: {
   password?: string;
   name?: string;
 }): Promise<void> {
-  const payload: {
-    username?: string;
-    username_unique: username,
-      "username unique": username,
-    password?: string;
-    password_hash?: string;
-    name?: string;
-  } = {};
+  const payload: Partial<
+    Record<"username" | "username_unique" | "username unique" | "password" | "password_hash" | "name", string>
+  > = {};
 
   if (input.username !== undefined) {
     const normalizedUsername = normalizeText(input.username);
