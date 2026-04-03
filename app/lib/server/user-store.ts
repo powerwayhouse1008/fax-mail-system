@@ -86,22 +86,10 @@ function mapRowToAccount(row: UserRow): UserAccount {
 
 export async function hashPassword(password: string): Promise<string> {
   const normalizedPassword = normalizeText(password);
-
-  try {
-    const data = await supabaseRequest<string>("/rpc/hash_password", {
-      method: "POST",
-      body: JSON.stringify({ plain_password: normalizedPassword }),
-    });
-
-    return data;
-  } catch (error) {
-    if (!isMissingSupabaseRpc(error)) {
-      throw error;
-    }
-
-
-   return hashPasswordLocally(normalizedPassword);
-  }
+  
+  // Always use local hashing so account creation/login stays consistent
+  // even when Supabase RPC functions are unavailable or misconfigured.
+  return hashPasswordLocally(normalizedPassword);
 }
 
 export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
@@ -133,10 +121,7 @@ export async function verifyPassword(password: string, passwordHash: string): Pr
 function isMissingSupabaseRpc(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
 
-  return (
-    error.message.includes("PGRST202") &&
-    (error.message.includes("/rpc/hash_password") || error.message.includes("/rpc/verify_password"))
-  );
+ return error.message.includes("PGRST202") && error.message.includes("verify_password");
 }
 function isMissingColumnError(error: unknown, columnName: string): boolean {
   return error instanceof Error && error.message.includes(`Could not find the '${columnName}' column`);
@@ -267,6 +252,7 @@ export async function updateUser(input: {
   const payload: Partial<
     Record<"username" | "username_unique" | "username unique" | "password" | "password_hash" | "name", string>
   > = {};
+  let normalizedUsername: string | undefined;
   let normalizedUsername: string | undefined;
   if (input.username !== undefined) {
     normalizedUsername = normalizeText(input.username);
