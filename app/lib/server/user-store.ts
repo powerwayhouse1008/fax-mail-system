@@ -3,9 +3,11 @@ import { DEFAULT_USER_ACCOUNTS, type UserAccount } from "../auth";
 
 type UserRow = {
   id: string | number;
-  username: string;
+  username?: string | null;
+  username_unique?: string | null;
   "username unique"?: string | null;
-  password_hash: string;
+  password_hash?: string | null;
+  password?: string | null;
   name: string | null;
   created_at: string;
 };
@@ -70,12 +72,13 @@ async function supabaseRequest<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 function mapRowToAccount(row: UserRow): UserAccount {
-  const username = row.username || row["username unique"] || row.name || "";
-  const fallbackName = row["username unique"] || row.username || username;
+  const username = row.username || row.username_unique || row["username unique"] || row.name || "";
+  const fallbackName = row.username_unique || row["username unique"] || row.username || username;
+  const passwordHash = row.password_hash || row.password || "";
   return {
-     id: String(row.id),
+    id: String(row.id),
     username,
-    password: row.password_hash,
+    password: passwordHash,
     name: row.name || fallbackName,
     createdAt: row.created_at,
   };
@@ -176,13 +179,19 @@ async function seedDefaultUsersIfNeeded(): Promise<void> {
   }
 
   const defaultRows = await Promise.all(
-    DEFAULT_USER_ACCOUNTS.map(async (account) => ({
-      username: account.username,
-      "username unique": account.username,
-      password_hash: await hashPassword(account.password),
-      name: account.name || account.username,
-      created_at: account.createdAt,
-    })),
+     DEFAULT_USER_ACCOUNTS.map(async (account) => {
+      const passwordHash = await hashPassword(account.password);
+
+      return {
+        username: account.username,
+        "username unique": account.username,
+        username_unique: account.username,
+        password_hash: passwordHash,
+        password: passwordHash,
+        name: account.name || account.username,
+        created_at: account.createdAt,
+      };
+    }),
   );
 
   await supabaseRequest<unknown>("/users", {
@@ -198,7 +207,7 @@ export async function readUsers(): Promise<UserAccount[]> {
   await seedDefaultUsersIfNeeded();
 
   const data = await supabaseRequest<UserRow[]>(
-    '/users?select=id,username,"username unique",password_hash,name,created_at&order=created_at.asc',
+     '/users?select=id,username,username_unique,"username unique",password_hash,password,name,created_at&order=created_at.asc',
   );
 
   return normalizeAccounts((data ?? []).map((row) => mapRowToAccount(row)));
@@ -217,8 +226,10 @@ export async function createUser(input: {
     method: "POST",
     body: JSON.stringify({
       username,
+      username_unique: username,
       "username unique": username,
       password_hash: passwordHash,
+      password: passwordHash,
       name,
       created_at: new Date().toISOString(),
     }),
@@ -229,11 +240,13 @@ export async function createUser(input: {
 export async function updateUser(input: {
   id: string;
   username?: string;
+   username_unique?: string;
   password?: string;
   name?: string;
 }): Promise<void> {
   const payload: {
     username?: string;
+    password?: string;
     "username unique"?: string;
     password_hash?: string;
     name?: string;
@@ -242,9 +255,14 @@ export async function updateUser(input: {
   if (input.username !== undefined) {
     const normalizedUsername = normalizeText(input.username);
     payload.username = normalizedUsername;
+    payload.username_unique = normalizedUsername;
     payload["username unique"] = normalizedUsername;
   }
-  if (input.password !== undefined) payload.password_hash = await hashPassword(input.password);
+  if (input.password !== undefined) {
+    const passwordHash = await hashPassword(input.password);
+    payload.password_hash = passwordHash;
+    payload.password = passwordHash;
+  }
   if (input.name !== undefined) payload.name = normalizeText(input.name);
 
   await supabaseRequest<unknown>(`/users?id=eq.${encodeURIComponent(input.id)}`, {
