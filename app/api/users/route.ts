@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
       if (!session || session.role !== "admin") return unauthorized();
 
     const users = await readUsers();
-     return NextResponse.json({ users });
+    const safeUsers = users.map((user) => ({
+      ...user,
+      password: "",
+    }));
+    return NextResponse.json({ users: safeUsers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "アカウント一覧の取得に失敗しました。";
     return NextResponse.json({ message }, { status: 500 });
