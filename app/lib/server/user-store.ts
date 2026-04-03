@@ -253,7 +253,6 @@ export async function updateUser(input: {
     Record<"username" | "username_unique" | "username unique" | "password" | "password_hash" | "name", string>
   > = {};
   let normalizedUsername: string | undefined;
-  let normalizedUsername: string | undefined;
   if (input.username !== undefined) {
     normalizedUsername = normalizeText(input.username);
     payload.username = normalizedUsername;
