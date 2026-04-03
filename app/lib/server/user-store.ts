@@ -240,12 +240,13 @@ export async function createUser(input: {
 export async function updateUser(input: {
   id: string;
   username?: string;
-   username_unique?: string;
+  username_unique?: string;
   password?: string;
   name?: string;
 }): Promise<void> {
   const payload: {
     username?: string;
+    username_unique?: string;
     password?: string;
     "username unique"?: string;
     password_hash?: string;
