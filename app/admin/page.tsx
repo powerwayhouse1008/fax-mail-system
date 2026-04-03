@@ -26,14 +26,14 @@ export default function AdminHomePage() {
     }
 
     const payload = (await response.json()) as {
-      users: Array<Omit<UserAccount, "password">>;
+     users: UserAccount[];
     };
 
     const mapped = payload.users.map((account) => ({
       id: account.id,
       name: account.name || account.username || "(No name)",
       loginId: account.username || "(No ID)",
-      password: "",
+       password: account.password || "",
     }));
 
     setAccounts(mapped);
