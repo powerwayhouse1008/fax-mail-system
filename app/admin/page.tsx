@@ -33,7 +33,9 @@ export default function AdminHomePage() {
       id: account.id,
       name: account.name || account.username || "(No name)",
       loginId: account.username || "(No ID)",
-       password: account.password || "",
+        // Never preload stored password hash into the editable password field.
+      // Password should only be sent when admin explicitly types a new value.
+      password: "",
     }));
 
     setAccounts(mapped);
