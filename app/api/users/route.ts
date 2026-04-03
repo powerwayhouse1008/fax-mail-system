@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
     const session = verifySessionToken(token);
 
-     if (!session || session.role !== "admin") return unauthorized();
+      if (!session || session.role !== "admin") return unauthorized();
 
     const users = await readUsers();
      return NextResponse.json({ users });
