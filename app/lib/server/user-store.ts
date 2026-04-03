@@ -270,7 +270,7 @@ export async function updateUser(input: {
 
   if (input.username !== undefined) {
     const normalizedUsername = normalizeText(input.username);
-     payload.username = normalizedUsername;
+    payload.username = normalizedUsername;
     payload.username_unique = normalizedUsername;
     payload["username unique"] = normalizedUsername;
   }
