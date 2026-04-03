@@ -270,26 +270,26 @@ export async function updateUser(input: {
 
   if (input.username !== undefined) {
     const normalizedUsername = normalizeText(input.username);
-    payloadBase.username = normalizedUsername;
+     payload.username = normalizedUsername;
     payload.username_unique = normalizedUsername;
     payload["username unique"] = normalizedUsername;
   }
   if (input.password !== undefined) {
     const passwordHash = await hashPassword(input.password);
-    payloadBase.password_hash = passwordHash;
-    payloadBase.password = passwordHash;
+    payload.password_hash = passwordHash;
+    payload.password = passwordHash;
   }
-  if (input.name !== undefined) payloadBase.name = normalizeText(input.name);
+  if (input.name !== undefined) payload.name = normalizeText(input.name);
 
-  const usernameValue = payloadBase.username;
+  const usernameValue = payload.username;
   const variants = usernameValue
     ? [
-        { ...payloadBase, username_unique: usernameValue, "username unique": usernameValue },
-        { ...payloadBase, "username unique": usernameValue },
-        { ...payloadBase, username_unique: usernameValue },
-        payloadBase,
+       { ...payload, username_unique: usernameValue, "username unique": usernameValue },
+        { ...payload, "username unique": usernameValue },
+        { ...payload, username_unique: usernameValue },
+        payload,
       ]
-    : [payloadBase];
+   : [payload];
 
   let lastError: unknown;
   for (const variant of variants) {
