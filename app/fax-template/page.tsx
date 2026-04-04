@@ -141,15 +141,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
     const loadDraft = async () => {
       let userScope = "guest";
 
-
-    try {
-        const response = await fetch("/api/auth/session", { cache: "no-store" });
-        if (response.ok) {
-          const session = (await response.json()) as SessionResponse;
-          userScope = session.user?.username?.trim() || "guest";
-        }
-      } catch {
-        userScope = "guest";try {
+       try {
         const response = await fetch("/api/auth/session", { cache: "no-store" });
         if (response.ok) {
           const session = (await response.json()) as SessionResponse;
@@ -158,18 +150,18 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       } catch {
         userScope = "guest";
       }
-  if (!mounted) {
+    
+   if (!mounted) {
         return;
       }
-    if (parsed.gmailAttachments) {
-        setGmailAttachments(parsed.gmailAttachments);
-      }
+    
       setStorageScope(userScope);
       const storageKey = `fax-template-draft:${userScope}:${channel}`;
       const savedDraft = window.localStorage.getItem(storageKey);
       if (!savedDraft) {
         return;
       }
+    
       try {
         const parsed = JSON.parse(savedDraft) as SavedDraft;
         if (parsed.content) {
@@ -200,8 +192,8 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
         }
       } catch {
         setSaveMessage("保存済みデータの読み込みに失敗しました。");
-      }
-     };
+     }
+    };
 
     loadDraft();
 
@@ -209,6 +201,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       mounted = false;
     };
   }, [channel]);
+    
 useEffect(() => {
     if (!isGmailChannel || !gmailBodyEditorRef.current) {
       return;
