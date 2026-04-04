@@ -16,12 +16,12 @@ export default function AdminHomePage() {
   const [accounts, setAccounts] = useState<PersonalAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const loadAccounts = async () => {
     const response = await fetch("/api/users", { cache: "no-store" });
     if (!response.ok) {
-      setNotice("アカウント一覧の読み込みに失敗しました。");
+       setNotice({ type: "error", text: "アカウント一覧の読み込みに失敗しました。" });
       return;
     }
 
@@ -40,7 +40,6 @@ export default function AdminHomePage() {
 
     setAccounts(mapped);
     setSelectedAccountId((current) => current || mapped[0]?.id || "");
-    setNotice("");
   };
 
   useEffect(() => {
@@ -72,12 +71,13 @@ export default function AdminHomePage() {
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      setNotice(payload?.message ?? "アカウント作成に失敗しました。");
+      setNotice({ type: "error", text: payload?.message ?? "アカウント作成に失敗しました。" });
       return;
     }
 
     event.currentTarget.reset();
     await loadAccounts();
+    setNotice({ type: "success", text: "アカウントを作成しました。" });
   };
 
   const updateSelectedAccount = (field: "name" | "loginId" | "password", value: string) => {
@@ -114,11 +114,11 @@ export default function AdminHomePage() {
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      setNotice(payload?.message ?? "アカウント更新に失敗しました。");
+      setNotice({ type: "error", text: payload?.message ?? "アカウント更新に失敗しました。" });
       return;
     }
 
-    setNotice("保存しました。");
+    setNotice({ type: "success", text: "保存しました。" });
     await loadAccounts();
   };
 
@@ -131,11 +131,12 @@ export default function AdminHomePage() {
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      setNotice(payload?.message ?? "アカウント削除に失敗しました。");
+      setNotice({ type: "error", text: payload?.message ?? "アカウント削除に失敗しました。" });
       return;
     }
 
     await loadAccounts();
+     setNotice({ type: "success", text: "アカウントを削除しました。" });
   };
 
   return (
@@ -177,28 +178,32 @@ export default function AdminHomePage() {
 
             <article className="admin-panel">
               <h2>登録済みアカウント一覧</h2>
-              <ul className="account-list">
-                {accounts.map((account) => (
-                  <li key={account.id} className="account-list-item">
-                    <button
-                      type="button"
-                      className={`account-item ${account.id === selectedAccount?.id ? "active" : ""}`}
-                      onClick={() => setSelectedAccountId(account.id)}
-                    >
-                      <strong>{account.name}</strong>
-                      <span>ID: {account.loginId}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary account-delete-btn"
-                      onClick={() => handleDeleteAccount(account.id)}
-                      aria-label={`${account.name}を削除`}
-                    >
-                      削除
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              {accounts.length === 0 ? (
+                <p>登録済みアカウントはありません。</p>
+              ) : (
+                <ul className="account-list">
+                  {accounts.map((account) => (
+                    <li key={account.id} className="account-list-item">
+                      <button
+                        type="button"
+                        className={`account-item ${account.id === selectedAccount?.id ? "active" : ""}`}
+                        onClick={() => setSelectedAccountId(account.id)}
+                      >
+                        <strong>{account.name}</strong>
+                        <span>ID: {account.loginId}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary account-delete-btn"
+                        onClick={() => handleDeleteAccount(account.id)}
+                        aria-label={`${account.name}を削除`}
+                      >
+                        削除
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </article>
           </div>
 
@@ -250,7 +255,11 @@ export default function AdminHomePage() {
             </article>
           ) : null}
 
-          {notice ? <p className="send-notice send-notice-error">{notice}</p> : null}
+          {notice ? (
+            <p className={`send-notice ${notice.type === "success" ? "send-notice-success" : "send-notice-error"}`}>
+              {notice.text}
+            </p>
+          ) : null}
         </section>
       </main>
     </AuthGuard>
