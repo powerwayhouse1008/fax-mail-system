@@ -81,7 +81,7 @@ const handleLogout = async () => {
               <p>以下のボタンから、見送付状テンプレート作成ページへ移動できます。</p>
             </div>
             <button className="btn btn-secondary" type="button" onClick={handleLogout}>
-              Đăng xuất
+              ログアウト
             </button>
           </div>
 
