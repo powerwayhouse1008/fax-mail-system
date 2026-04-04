@@ -44,6 +44,12 @@ type SavedDraft = {
   };
   savedAt?: string;
 };
+type SessionResponse = {
+  authenticated?: boolean;
+  user?: {
+    username?: string;
+  };
+};
 const channelLabels: Record<string, string> = {
   fax: "FAX一括送信",
   gmail: "Gmail配信",
@@ -82,6 +88,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   const [messageBodyHtml, setMessageBodyHtml] = useState(faxTemplateContent.messageBody);
   const gmailBodyEditorRef = useRef<HTMLDivElement | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [storageScope, setStorageScope] = useState("guest");
   const channelLabel = useMemo(() => channelLabels[channel] ?? "FAX一括送信", [channel]);
    const sentAtDate = useMemo(() => {
     return new Intl.DateTimeFormat("ja-JP", {
@@ -129,44 +136,78 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   };
 
   useEffect(() => {
-    const storageKey = `fax-template-draft:${channel}`;
-    const savedDraft = window.localStorage.getItem(storageKey);
+    let mounted = true;
 
-    if (!savedDraft) {
-      return;
-    }
+    const loadDraft = async () => {
+      let userScope = "guest";
+
 
     try {
-       const parsed = JSON.parse(savedDraft) as SavedDraft;
-      if (parsed.content) {
-        setContent((prev) => ({ ...prev, ...parsed.content }));
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (response.ok) {
+          const session = (await response.json()) as SessionResponse;
+          userScope = session.user?.username?.trim() || "guest";
+        }
+      } catch {
+        userScope = "guest";try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (response.ok) {
+          const session = (await response.json()) as SessionResponse;
+          userScope = session.user?.username?.trim() || "guest";
+        }
+      } catch {
+        userScope = "guest";
       }
-   if (parsed.messageBodyHtml) {
-        setMessageBodyHtml(parsed.messageBodyHtml);
-      } else if (parsed.content?.messageBody) {
-        setMessageBodyHtml(parsed.content.messageBody);
-      }
-      if (parsed.uploadedCard) {
-        setUploadedCardName(parsed.uploadedCard.name);
-        setUploadedCardType(parsed.uploadedCard.type);
-        setUploadedCardUrl(parsed.uploadedCard.dataUrl);
+  if (!mounted) {
+        return;
       }
     if (parsed.gmailAttachments) {
         setGmailAttachments(parsed.gmailAttachments);
       }
-      if (parsed.savedAt) {
-        const formatted = new Intl.DateTimeFormat("ja-JP", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        }).format(new Date(parsed.savedAt));
-        setSaveMessage(`保存済みデータを読み込みました（${formatted}）。`);
+      setStorageScope(userScope);
+      const storageKey = `fax-template-draft:${userScope}:${channel}`;
+      const savedDraft = window.localStorage.getItem(storageKey);
+      if (!savedDraft) {
+        return;
       }
-    } catch {
-      setSaveMessage("保存済みデータの読み込みに失敗しました。");
-    }
+      try {
+        const parsed = JSON.parse(savedDraft) as SavedDraft;
+        if (parsed.content) {
+          setContent((prev) => ({ ...prev, ...parsed.content }));
+        }
+        if (parsed.messageBodyHtml) {
+          setMessageBodyHtml(parsed.messageBodyHtml);
+        } else if (parsed.content?.messageBody) {
+          setMessageBodyHtml(parsed.content.messageBody);
+        }
+        if (parsed.uploadedCard) {
+          setUploadedCardName(parsed.uploadedCard.name);
+          setUploadedCardType(parsed.uploadedCard.type);
+          setUploadedCardUrl(parsed.uploadedCard.dataUrl);
+        }
+        if (parsed.gmailAttachments) {
+          setGmailAttachments(parsed.gmailAttachments);
+        }
+        if (parsed.savedAt) {
+          const formatted = new Intl.DateTimeFormat("ja-JP", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date(parsed.savedAt));
+          setSaveMessage(`保存済みデータを読み込みました（${formatted}）。`);
+        }
+      } catch {
+        setSaveMessage("保存済みデータの読み込みに失敗しました。");
+      }
+     };
+
+    loadDraft();
+
+    return () => {
+      mounted = false;
+    };
   }, [channel]);
 useEffect(() => {
     if (!isGmailChannel || !gmailBodyEditorRef.current) {
@@ -178,7 +219,7 @@ useEffect(() => {
   }, [isGmailChannel, messageBodyHtml]);
 
  const handleSaveDraft = () => {
-    const storageKey = `fax-template-draft:${channel}`;
+    const storageKey = `fax-template-draft:${storageScope}:${channel}`;
     const savedAt = new Date().toISOString();
 
     window.localStorage.setItem(
