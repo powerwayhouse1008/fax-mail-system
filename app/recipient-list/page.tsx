@@ -34,6 +34,7 @@ type SavedDraft = {
   gmailAttachments?: {
     name?: string;
     type?: string;
+    url?: string;
     dataUrl?: string;
   }[];
 };
@@ -55,7 +56,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const [ccListInput, setCcListInput] = useState("");
   const [bccListInput, setBccListInput] = useState("");
   const [attachments, setAttachments] = useState<
-    { filename: string; content: string; type: string }[]
+     { filename: string; content?: string; url?: string; type: string }[]
   >([]);
   const [isSending, setIsSending] = useState(false);
   const [sendMessage, setSendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -142,13 +143,14 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
         if (Array.isArray(parsed.gmailAttachments)) {
           const normalizedAttachments = parsed.gmailAttachments
-            .filter((file) => file?.name && file?.dataUrl)
+            .filter((file) => file?.name && (file?.url || file?.dataUrl))
             .map((file) => ({
               filename: file.name ?? "attachment",
-              content: (file.dataUrl ?? "").split(",")[1] ?? "",
+              content: file.dataUrl ? (file.dataUrl ?? "").split(",")[1] ?? "" : undefined,
+              url: file.url,
               type: file.type || "application/octet-stream",
             }))
-            .filter((file) => Boolean(file.content));
+            .filter((file) => Boolean(file.content || file.url));
           setAttachments(normalizedAttachments);
         }
       } catch {
