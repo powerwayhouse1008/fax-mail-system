@@ -37,8 +37,10 @@ Set these environment variables before running the app:
 
 ```bash
 NEXILINK_FAX_ENDPOINT=https://api.nexilink.example/v1/faxes
-NEXILINK_API_KEY=your_nexilink_api_key
-NEXILINK_SENDER_ID=optional_sender_id
+NEXLINK_API_BASE_URL=https://sandbox-hea.nexlink2.jp
+NEXLINK_API_TOKEN=
 ```
 
 `NEXILINK_SENDER_ID` is optional and depends on your NexiLink contract.
+
+For backward compatibility, `NEXILINK_FAX_ENDPOINT` and `NEXILINK_API_KEY` are also accepted.
