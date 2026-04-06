@@ -119,11 +119,11 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       body: formData,
     });
 
+    const data = (await response.json()) as { url?: string; error?: string };
     if (!response.ok) {
-      throw new Error("upload failed");
+      throw new Error(data.error || "upload failed");
     }
 
-    const data = (await response.json()) as { url?: string };
     if (!data.url) {
       throw new Error("invalid upload response");
     }
@@ -310,8 +310,10 @@ useEffect(() => {
       setUploadedCardName(file.name);
       setUploadedCardType(file.type);
      setUploadedCardUrl(uploadedUrl);
-    } catch {
-      setSaveMessage("名刺ファイルのアップロードに失敗しました。");
+    } catch (error) {
+      setSaveMessage(
+        `名刺ファイルのアップロードに失敗しました。${error instanceof Error ? ` (${error.message})` : ""}`,
+      );
     }
   };
 const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>) => {
