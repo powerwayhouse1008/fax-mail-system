@@ -67,13 +67,10 @@ export default function SendHistoryPage() {
               </tr>
             </thead>
             <tbody>
-               {historyItems.length === 0 ? (
+              {historyItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>まだ送信履歴がありません。</td>
-                    <span className={`status-chip status-${item.status}`}>{statusLabel[item.status]}</span>
-                  </td>
+                  <td colSpan={6}>まだ送信履歴がありません。</td>   
                 </tr>
-              ))}
               ) : (
                 historyItems.map((item) => (
                   <tr key={item.id}>
