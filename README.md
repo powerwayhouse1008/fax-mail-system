@@ -19,3 +19,14 @@ npm run dev
 4. Update account name/id/password.
 5. Delete account.
 6. Login with updated account credentials to verify password hashing works.
+ 
+## Gmail sending with Resend
+
+Set these environment variables before running the app:
+
+```bash
+RESEND_API_KEY=re_xxxxxxxxx
+RESEND_FROM_EMAIL=onboarding@resend.dev
+```
+
+`RESEND_FROM_EMAIL` must be a verified sender in your Resend account.
