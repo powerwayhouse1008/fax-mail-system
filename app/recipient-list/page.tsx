@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { appendSendHistory } from "../send-history/history-store";
+
 
 type RecipientListPageProps = {
   searchParams?: {
@@ -192,6 +194,14 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     }
 
     if (gmailAddresses.length === 0 && faxNumbers.length > 0) {
+      appendSendHistory(
+        faxNumbers.map((faxNumber) => ({
+          channel: "fax",
+          recipient: faxNumber,
+          subject: mailSubject,
+          status: "sending" as const,
+        })),
+      );
       setSendMessage({
         type: "success",
         text: `${faxNumbers.length}件のFAX送信リストを受け付けました。`,
@@ -230,6 +240,20 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       const data = await response.json();
 
       if (!response.ok) {
+        appendSendHistory([
+          ...faxNumbers.map((faxNumber) => ({
+            channel: "fax" as const,
+            recipient: faxNumber,
+            subject: mailSubject,
+            status: "sending" as const,
+          })),
+          ...gmailAddresses.map((email) => ({
+            channel: "gmail" as const,
+            recipient: email,
+            subject: mailSubject,
+            status: "failed" as const,
+          })),
+        ]);
         setSendMessage({
           type: "error",
           text: data?.error ?? "Gmail送信に失敗しました。",
@@ -238,6 +262,30 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       }
 
       const failedCount = Array.isArray(data.failed) ? data.failed.length : 0;
+      const failedRecipients = new Set(
+        Array.isArray(data.failed)
+          ? data.failed
+              .filter((item: { to?: unknown }) => typeof item?.to === "string")
+              .map((item: { to: string }) => item.to)
+          : [],
+      );
+
+      const historyEntries = [
+        ...faxNumbers.map((faxNumber) => ({
+          channel: "fax" as const,
+          recipient: faxNumber,
+          subject: mailSubject,
+          status: "sending" as const,
+        })),
+        ...gmailAddresses.map((email) => ({
+          channel: "gmail" as const,
+          recipient: email,
+          subject: mailSubject,
+          status: failedRecipients.has(email) ? ("failed" as const) : ("success" as const),
+        })),
+      ];
+      appendSendHistory(historyEntries);
+
       if (failedCount > 0) {
         setSendMessage({
           type: "error",
