@@ -36,11 +36,14 @@ type SavedDraft = {
     name: string;
     type: string;
     dataUrl: string;
+     url?: string;
+    dataUrl?: string;
   }[];
   uploadedCard?: {
     name: string;
     type: string;
-    dataUrl: string;
+    url?: string;
+    dataUrl?: string;
   };
   savedAt?: string;
 };
@@ -84,7 +87,7 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   const [uploadedCardUrl, setUploadedCardUrl] = useState("");
   const [uploadedCardType, setUploadedCardType] = useState("");
    const [gmailAttachments, setGmailAttachments] = useState<
-    { name: string; type: string; dataUrl: string }[]
+    { name: string; type: string; url: string }[]
   >([]);
   const [messageBodyHtml, setMessageBodyHtml] = useState(faxTemplateContent.messageBody);
   const gmailBodyEditorRef = useRef<HTMLDivElement | null>(null);
@@ -105,14 +108,38 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
   };
      const isGmailChannel = channel === "gmail";
 
-  const addInlineImageToBody = (dataUrl: string) => {
+  const uploadFileToSupabase = async (file: File, category: "cards" | "gmail" | "inline") => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("channel", channel);
+    formData.append("scope", storageScope);
+    formData.append("category", category);
+
+    const response = await fetch("/api/storage/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      throw new Error("upload failed");
+    }
+
+    const data = (await response.json()) as { url?: string };
+    if (!data.url) {
+      throw new Error("invalid upload response");
+    }
+
+    return data.url;
+  };
+
+  const addInlineImageToBody = (imageUrl: string) => {
     if (!gmailBodyEditorRef.current) {
       return;
     }
     const editor = gmailBodyEditorRef.current;
     const selection = window.getSelection();
     const imageNode = document.createElement("img");
-    imageNode.src = dataUrl;
+    imageNode.src = imageUrl;
     imageNode.alt = "貼り付け画像";
     imageNode.style.maxWidth = "100%";
     imageNode.style.height = "auto";
@@ -176,10 +203,18 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
         if (parsed.uploadedCard) {
           setUploadedCardName(parsed.uploadedCard.name);
           setUploadedCardType(parsed.uploadedCard.type);
-          setUploadedCardUrl(parsed.uploadedCard.dataUrl);
+          setUploadedCardUrl(parsed.uploadedCard.url ?? parsed.uploadedCard.dataUrl ?? "");
         }
         if (parsed.gmailAttachments) {
-          setGmailAttachments(parsed.gmailAttachments);
+          const normalizedAttachments = parsed.gmailAttachments
+            .filter((item) => item?.name && (item.url || item.dataUrl))
+            .map((item) => ({
+              name: item.name,
+              type: item.type || "application/octet-stream",
+              url: item.url ?? item.dataUrl ?? "",
+            }))
+            .filter((item) => Boolean(item.url));
+          setGmailAttachments(normalizedAttachments);
         }
         if (parsed.savedAt) {
           const formatted = new Intl.DateTimeFormat("ja-JP", {
@@ -226,7 +261,7 @@ useEffect(() => {
             ? {
                 name: uploadedCardName,
                 type: uploadedCardType,
-                dataUrl: uploadedCardUrl,
+                 url: uploadedCardUrl,
               }
             : null,
           gmailAttachments,
@@ -262,7 +297,7 @@ useEffect(() => {
     router.push(`/recipient-list?channel=${channel}`);
   };
 
-  const handleBusinessCardChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBusinessCardChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
       setUploadedCardName("");
@@ -271,17 +306,14 @@ useEffect(() => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result !== "string") {
-        return;
-      }
+     try {
+      const uploadedUrl = await uploadFileToSupabase(file, "cards");
       setUploadedCardName(file.name);
       setUploadedCardType(file.type);
-      setUploadedCardUrl(result);
-    };
-    reader.readAsDataURL(file);
+     setUploadedCardUrl(uploadedUrl);
+    } catch {
+      setSaveMessage("名刺ファイルのアップロードに失敗しました。");
+    }
   };
 const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -292,26 +324,17 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
 
     Promise.all(
       files.map(
-        (file) =>
-          new Promise<{ name: string; type: string; dataUrl: string }>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              if (typeof reader.result !== "string") {
-                reject(new Error("invalid file"));
-                return;
-              }
-              resolve({ name: file.name, type: file.type, dataUrl: reader.result });
-            };
-            reader.onerror = () => reject(reader.error ?? new Error("file read failed"));
-            reader.readAsDataURL(file);
-          }),
+        async (file) => {
+          const uploadedUrl = await uploadFileToSupabase(file, "gmail");
+          return { name: file.name, type: file.type, url: uploadedUrl };
+        },
       ),
     )
       .then((attachments) => setGmailAttachments(attachments))
-      .catch(() => setSaveMessage("添付ファイルの読み込みに失敗しました。"));
+      catch(() => setSaveMessage("添付ファイルのアップロードに失敗しました。"));
   };
 
-  const handleGmailBodyPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+  const handleGmailBodyPaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
     const items = Array.from(event.clipboardData.items);
     const imageItem = items.find((item) => item.type.startsWith("image/"));
     if (!imageItem) {
@@ -322,14 +345,12 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
     if (!file) {
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        return;
-      }
-      addInlineImageToBody(reader.result);
-    };
-    reader.readAsDataURL(file);
+     try {
+      const uploadedUrl = await uploadFileToSupabase(file, "inline");
+      addInlineImageToBody(uploadedUrl);
+    } catch {
+      setSaveMessage("貼り付け画像のアップロードに失敗しました。");
+    }
   };
 
   return (
