@@ -331,7 +331,7 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
       ),
     )
       .then((attachments) => setGmailAttachments(attachments))
-      catch(() => setSaveMessage("添付ファイルのアップロードに失敗しました。"));
+      .catch(() => setSaveMessage("添付ファイルのアップロードに失敗しました。"));
   };
 
   const handleGmailBodyPaste = async (event: React.ClipboardEvent<HTMLDivElement>) => {
