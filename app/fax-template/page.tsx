@@ -35,8 +35,7 @@ type SavedDraft = {
   gmailAttachments?: {
     name: string;
     type: string;
-    dataUrl: string;
-     url?: string;
+    url?: string;
     dataUrl?: string;
   }[];
   uploadedCard?: {
