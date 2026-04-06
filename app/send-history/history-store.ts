@@ -12,11 +12,41 @@ export type SendHistoryItem = {
 
 const STORAGE_KEY = "send-history-items";
 const MAX_HISTORY_ITEMS = 200;
+const HISTORY_RETENTION_MONTHS = 3;
 
 const padTwoDigits = (value: number) => value.toString().padStart(2, "0");
 
 const formatDateTime = (date: Date) =>
   `${date.getFullYear()}-${padTwoDigits(date.getMonth() + 1)}-${padTwoDigits(date.getDate())} ${padTwoDigits(date.getHours())}:${padTwoDigits(date.getMinutes())}`;
+const parseSentAt = (value: string): Date | null => {
+  const matched = value.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+  if (!matched) {
+    return null;
+  }
+
+  const [, year, month, day, hour, minute] = matched;
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0,
+    0,
+  );
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+};
+
+const createRetentionCutoff = () => {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - HISTORY_RETENTION_MONTHS);
+  return cutoff;
+};
 
 const uniqueId = (channel: SendChannel, date: Date) => {
   const prefix = channel === "fax" ? "FAX" : "GMAIL";
@@ -42,15 +72,26 @@ export const loadSendHistory = (): SendHistoryItem[] => {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter(
+   const retentionCutoff = createRetentionCutoff();
+    const sanitized = parsed.filter(
       (item) =>
         typeof item?.id === "string" &&
         (item.channel === "fax" || item.channel === "gmail") &&
         typeof item.recipient === "string" &&
         typeof item.subject === "string" &&
         typeof item.sentAt === "string" &&
-        (item.status === "success" || item.status === "failed" || item.status === "sending"),
+        (item.status === "success" || item.status === "failed" || item.status === "sending") &&
+        (() => {
+          const sentAtDate = parseSentAt(item.sentAt);
+          return sentAtDate !== null && sentAtDate >= retentionCutoff;
+        })(),
     );
+
+    if (sanitized.length !== parsed.length) {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
+    }
+
+    return sanitized;
   } catch {
     return [];
   }
