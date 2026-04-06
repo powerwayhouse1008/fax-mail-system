@@ -1,12 +1,41 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type RecipientListPageProps = {
   searchParams?: {
     channel?: string;
   };
+};
+
+type FaxTemplateContent = {
+  to?: string;
+  from?: string;
+  cc?: string;
+  bcc?: string;
+  subject?: string;
+  greeting?: string;
+  request?: string;
+  messageBody?: string;
+  signature?: string;
+  contact?: string;
+  propertyName?: string;
+  preferredDate?: string;
+  preferredTime?: string;
+  companyName?: string;
+  address?: string;
+  phoneAndFax?: string;
+};
+
+type SavedDraft = {
+  content?: FaxTemplateContent;
+  messageBodyHtml?: string;
+  gmailAttachments?: {
+    name?: string;
+    type?: string;
+    dataUrl?: string;
+  }[];
 };
 
 const cleanList = (value: string) =>
@@ -17,15 +46,121 @@ const cleanList = (value: string) =>
 
 export default function RecipientListPage({ searchParams }: RecipientListPageProps) {
   const channel = searchParams?.channel ?? "fax";
+  const isGmailChannel = channel === "gmail";
   const [faxListInput, setFaxListInput] = useState("");
   const [gmailListInput, setGmailListInput] = useState("");
+  const [mailSubject, setMailSubject] = useState("FAX Mail System からの送信テスト");
+  const [mailBodyHtml, setMailBodyHtml] = useState("<p>FAX Mail System からの送信テストです。</p>");
+  const [mailBodyText, setMailBodyText] = useState("FAX Mail System からの送信テストです。");
+  const [ccListInput, setCcListInput] = useState("");
+  const [bccListInput, setBccListInput] = useState("");
+  const [attachments, setAttachments] = useState<
+    { filename: string; content: string; type: string }[]
+  >([]);
   const [isSending, setIsSending] = useState(false);
   const [sendMessage, setSendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
   const faxNumbers = useMemo(() => cleanList(faxListInput), [faxListInput]);
   const gmailAddresses = useMemo(() => cleanList(gmailListInput), [gmailListInput]);
+  const ccAddresses = useMemo(() => cleanList(ccListInput), [ccListInput]);
+  const bccAddresses = useMemo(() => cleanList(bccListInput), [bccListInput]);
   const maxLength = Math.max(faxNumbers.length, gmailAddresses.length);
-  
+
+    useEffect(() => {
+    let mounted = true;
+    const loadDraft = async () => {
+      let userScope = "guest";
+      try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        if (response.ok) {
+          const session = (await response.json()) as { user?: { username?: string } };
+          userScope = session.user?.username?.trim() || "guest";
+        }
+      } catch {
+        userScope = "guest";
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      const storageKey = `fax-template-draft:${userScope}:${channel}`;
+      const savedDraft = window.localStorage.getItem(storageKey);
+      if (!savedDraft) {
+        return;
+      }
+
+      try {
+        const parsed = JSON.parse(savedDraft) as SavedDraft;
+        const draftContent = parsed.content ?? {};
+        const subject = draftContent.subject?.trim();
+        const bodyFromEditor = parsed.messageBodyHtml?.trim();
+        const messageBody = draftContent.messageBody?.trim();
+        const signature = draftContent.signature?.trim();
+
+        if (subject) {
+          setMailSubject(subject);
+        }
+        if (draftContent.cc?.trim()) {
+          setCcListInput(draftContent.cc);
+        }
+        if (draftContent.bcc?.trim()) {
+          setBccListInput(draftContent.bcc);
+        }
+
+        if (isGmailChannel) {
+          const bodyHtml = bodyFromEditor || (messageBody ? `<p>${messageBody}</p>` : "");
+          const signatureHtml = signature ? `<hr/><pre>${signature}</pre>` : "";
+          const mergedHtml = `${bodyHtml}${signatureHtml}` || "<p>FAX Mail System からの送信テストです。</p>";
+          setMailBodyHtml(mergedHtml);
+          setMailBodyText([messageBody, signature].filter(Boolean).join("\n\n") || "FAX Mail System からの送信テストです。");
+        } else {
+          const faxSummaryText = [
+            draftContent.to && `TO: ${draftContent.to}`,
+            draftContent.from && `FROM: ${draftContent.from}`,
+            draftContent.propertyName && `物件名: ${draftContent.propertyName}`,
+            draftContent.preferredDate && `内見希望日: ${draftContent.preferredDate}`,
+            draftContent.preferredTime && `内見希望時間: ${draftContent.preferredTime}`,
+            draftContent.greeting,
+            draftContent.request,
+            draftContent.contact && `連絡事項: ${draftContent.contact}`,
+            messageBody,
+            signature,
+          ]
+            .filter(Boolean)
+            .join("\n");
+          const faxSummaryHtml = faxSummaryText
+            .split("\n")
+            .map((line) => `<p>${line}</p>`)
+            .join("");
+
+          if (faxSummaryText) {
+            setMailBodyText(faxSummaryText);
+            setMailBodyHtml(faxSummaryHtml);
+          }
+        }
+
+        if (Array.isArray(parsed.gmailAttachments)) {
+          const normalizedAttachments = parsed.gmailAttachments
+            .filter((file) => file?.name && file?.dataUrl)
+            .map((file) => ({
+              filename: file.name ?? "attachment",
+              content: (file.dataUrl ?? "").split(",")[1] ?? "",
+              type: file.type || "application/octet-stream",
+            }))
+            .filter((file) => Boolean(file.content));
+          setAttachments(normalizedAttachments);
+        }
+      } catch {
+        // noop
+      }
+    };
+
+    loadDraft();
+    return () => {
+      mounted = false;
+    };
+  }, [channel, isGmailChannel]);
   const handleSend = async () => {
     if (maxLength === 0) {
       setSendMessage({
@@ -52,7 +187,15 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ emails: gmailAddresses }),
+       body: JSON.stringify({
+          emails: gmailAddresses,
+          cc: ccAddresses,
+          bcc: bccAddresses,
+          subject: mailSubject,
+          html: mailBodyHtml,
+          text: mailBodyText,
+          attachments,
+        }),
       });
 
       const data = await response.json();
@@ -115,7 +258,31 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
             />
           </label>
         </div>
-
+ <div className="recipient-grid">
+          <label className="field">
+            <span>Cc（任意）</span>
+            <textarea
+              rows={3}
+              value={ccListInput}
+              onChange={(event) => setCcListInput(event.target.value)}
+              placeholder={"cc1@gmail.com\ncc2@gmail.com"}
+            />
+          </label>
+          <label className="field">
+            <span>Bcc（任意）</span>
+            <textarea
+              rows={3}
+              value={bccListInput}
+              onChange={(event) => setBccListInput(event.target.value)}
+              placeholder={"bcc1@gmail.com\nbcc2@gmail.com"}
+            />
+          </label>
+        </div>
+        <label className="field">
+          <span>件名</span>
+          <input value={mailSubject} onChange={(event) => setMailSubject(event.target.value)} />
+        </label>
+        
         <section className="recipient-preview">
          <h2>送信順のプレビュー</h2>
           {maxLength === 0 ? (
@@ -130,6 +297,13 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
               ))}
             </ol>
           )}
+        </section>
+        <section className="recipient-preview">
+          <h2>メール本文プレビュー</h2>
+          <div dangerouslySetInnerHTML={{ __html: mailBodyHtml }} />
+          {attachments.length > 0 ? (
+            <p>添付ファイル: {attachments.map((file) => file.filename).join(", ")}</p>
+          ) : null}
         </section>
         {sendMessage ? (
           <p
