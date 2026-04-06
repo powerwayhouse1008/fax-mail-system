@@ -1,51 +1,8 @@
+"use client";
+
 import Link from "next/link";
-
-type SendChannel = "fax" | "gmail";
-type SendStatus = "success" | "failed" | "sending";
-
-type SendHistoryItem = {
-  id: string;
-  channel: SendChannel;
-  recipient: string;
-  subject: string;
-  sentAt: string;
-  status: SendStatus;
-};
-
-const historyItems: SendHistoryItem[] = [
-  {
-    id: "FAX-20260401-001",
-    channel: "fax",
-    recipient: "03-9876-5432",
-    subject: "新サービスご案内",
-    sentAt: "2026-04-01 10:03",
-    status: "success",
-  },
-  {
-    id: "GMAIL-20260401-014",
-    channel: "gmail",
-    recipient: "tanaka@example.com",
-    subject: "4月キャンペーンのお知らせ",
-    sentAt: "2026-04-01 09:41",
-    status: "success",
-  },
-  {
-    id: "FAX-20260331-125",
-    channel: "fax",
-    recipient: "06-1234-0000",
-    subject: "定期メンテナンス通知",
-    sentAt: "2026-03-31 17:22",
-    status: "failed",
-  },
-  {
-    id: "GMAIL-20260331-047",
-    channel: "gmail",
-    recipient: "sales-team@example.com",
-    subject: "週次レポート",
-    sentAt: "2026-03-31 16:30",
-    status: "sending",
-  },
-];
+import { useEffect, useMemo, useState } from "react";
+import { loadSendHistory, SendChannel, SendHistoryItem, SendStatus } from "./history-store";
 
 const channelLabel: Record<SendChannel, string> = {
   fax: "FAX",
@@ -59,9 +16,15 @@ const statusLabel: Record<SendStatus, string> = {
 };
 
 export default function SendHistoryPage() {
+   const [historyItems, setHistoryItems] = useState<SendHistoryItem[]>([]);
+
+  useEffect(() => {
+    setHistoryItems(loadSendHistory());
+  }, []);
+
   const total = historyItems.length;
-  const faxCount = historyItems.filter((item) => item.channel === "fax").length;
-  const gmailCount = historyItems.filter((item) => item.channel === "gmail").length;
+  const faxCount = useMemo(() => historyItems.filter((item) => item.channel === "fax").length, [historyItems]);
+  const gmailCount = useMemo(() => historyItems.filter((item) => item.channel === "gmail").length, [historyItems]);
 
   return (
     <main className="dashboard-shell">
@@ -104,18 +67,27 @@ export default function SendHistoryPage() {
               </tr>
             </thead>
             <tbody>
-              {historyItems.map((item) => (
-                <tr key={item.id}>
-                  <td>{item.id}</td>
-                  <td>{channelLabel[item.channel]}</td>
-                  <td>{item.recipient}</td>
-                  <td>{item.subject}</td>
-                  <td>{item.sentAt}</td>
-                  <td>
+               {historyItems.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>まだ送信履歴がありません。</td>
                     <span className={`status-chip status-${item.status}`}>{statusLabel[item.status]}</span>
                   </td>
                 </tr>
               ))}
+              ) : (
+                historyItems.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.id}</td>
+                    <td>{channelLabel[item.channel]}</td>
+                    <td>{item.recipient}</td>
+                    <td>{item.subject}</td>
+                    <td>{item.sentAt}</td>
+                    <td>
+                      <span className={`status-chip status-${item.status}`}>{statusLabel[item.status]}</span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
