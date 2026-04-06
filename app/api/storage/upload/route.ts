@@ -52,28 +52,60 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+　const fileBuffer = Buffer.from(await file.arrayBuffer());
+  const uploadHeaders = {
+    Authorization: `Bearer ${config.serviceRoleKey}`,
+    apikey: config.serviceRoleKey,
+    "x-upsert": "true",
+    "Content-Type": file.type || "application/octet-stream",
+  };
+  const uploadUrl = `${config.supabaseUrl}/storage/v1/object/${DEFAULT_BUCKET}/${objectPath}`;
+
+  const uploadToBucket = () =>
+    fetch(uploadUrl, {
+      method: "POST",
+      headers: uploadHeaders,
+      body: fileBuffer,
+    });
 
   try {
-    const uploadResponse = await fetch(
-      `${config.supabaseUrl}/storage/v1/object/${DEFAULT_BUCKET}/${objectPath}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.serviceRoleKey}`,
-          apikey: config.serviceRoleKey,
-          "x-upsert": "true",
-          "Content-Type": file.type || "application/octet-stream",
-        },
-        body: Buffer.from(await file.arrayBuffer()),
-      },
-    );
+     let uploadResponse = await uploadToBucket();
 
     if (!uploadResponse.ok) {
-      const errorBody = await uploadResponse.text();
-      return NextResponse.json(
-        { error: `アップロードに失敗しました: ${errorBody}` },
-        { status: uploadResponse.status },
-      );
+       let latestErrorBody = await uploadResponse.text();
+      const isBucketNotFound =
+        uploadResponse.status === 404 &&
+        /bucket not found/i.test(latestErrorBody);
+
+      if (isBucketNotFound) {
+        const createBucketResponse = await fetch(`${config.supabaseUrl}/storage/v1/bucket`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.serviceRoleKey}`,
+            apikey: config.serviceRoleKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: DEFAULT_BUCKET,
+            name: DEFAULT_BUCKET,
+            public: true,
+          }),
+        });
+
+        if (createBucketResponse.ok || createBucketResponse.status === 409) {
+          uploadResponse = await uploadToBucket();
+          if (!uploadResponse.ok) {
+            latestErrorBody = await uploadResponse.text();
+          }
+        }
+      }
+
+      if (!uploadResponse.ok) {
+        return NextResponse.json(
+          { error: `アップロードに失敗しました: ${latestErrorBody}` },
+          { status: uploadResponse.status },
+        );
+      }
     }
 
     const publicUrl = `${config.supabaseUrl}/storage/v1/object/public/${DEFAULT_BUCKET}/${objectPath}`;
