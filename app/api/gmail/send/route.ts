@@ -6,6 +6,7 @@ const MAX_SUBJECT_LENGTH = 200;
 type AttachmentPayload = {
   filename?: unknown;
   content?: unknown;
+  url?: unknown;
   type?: unknown;
 };
 
@@ -64,12 +65,13 @@ export async function POST(request: Request) {
     typeof payload.text === "string" && payload.text.trim()
       ? payload.text
       : "FAX Mail System からの送信テストです。";
-  const attachments = Array.isArray(payload.attachments)
+  const attachmentsPayload = Array.isArray(payload.attachments)
     ? payload.attachments
         .filter((item): item is AttachmentPayload => typeof item === "object" && item !== null)
         .map((item) => ({
           filename: typeof item.filename === "string" ? item.filename : "",
           content: typeof item.content === "string" ? item.content : "",
+          url: typeof item.url === "string" ? item.url : "",
           type: typeof item.type === "string" ? item.type : "application/octet-stream",
         }))
         .filter((item) => item.filename && item.content)
@@ -79,6 +81,34 @@ export async function POST(request: Request) {
   }
 
   try {
+    const attachments = await Promise.all(
+      attachmentsPayload.map(async (item) => {
+        if (item.content) {
+          return item;
+        }
+
+        if (!item.url) {
+          return null;
+        }
+
+        const fileResponse = await fetch(item.url);
+        if (!fileResponse.ok) {
+          throw new Error(`添付ファイルの取得に失敗しました: ${item.filename}`);
+        }
+        const arrayBuffer = await fileResponse.arrayBuffer();
+
+        return {
+          filename: item.filename,
+          content: Buffer.from(arrayBuffer).toString("base64"),
+          type: item.type,
+        };
+      }),
+    );
+    const resolvedAttachments = attachments.filter(
+      (item): item is { filename: string; content: string; type: string } =>
+        Boolean(item?.filename && item.content),
+    );
+
     const results = await Promise.all(
       validEmails.map(async (to) => {
         const response = await fetch("https://api.resend.com/emails", {
@@ -95,7 +125,7 @@ export async function POST(request: Request) {
             subject: customSubject,
             html: customHtml,
             text: customText,
-            attachments: attachments.length > 0 ? attachments : undefined,
+            attachments: resolvedAttachments.length > 0 ? resolvedAttachments : undefined,
           }),
         });
 
