@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 type FaxTemplatePageProps = {
   searchParams?: {
@@ -77,6 +77,7 @@ const faxTemplateContent: FaxTemplateContent = {
 };
 
 export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) {
+  const router = useRouter();
   const channel = searchParams?.channel ?? "fax";
   const [content, setContent] = useState<FaxTemplateContent>(faxTemplateContent);
   const [uploadedCardName, setUploadedCardName] = useState("");
@@ -211,7 +212,7 @@ useEffect(() => {
     }
   }, [isGmailChannel, messageBodyHtml]);
 
- const handleSaveDraft = () => {
+  const persistDraft = () => {
     const storageKey = `fax-template-draft:${storageScope}:${channel}`;
     const savedAt = new Date().toISOString();
 
@@ -232,17 +233,24 @@ useEffect(() => {
       }),
     );
 
-    const formatted = new Intl.DateTimeFormat("ja-JP", {
+    return new Intl.DateTimeFormat("ja-JP", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(savedAt));
+};
+
+  const handleSaveDraft = () => {
+    const formatted = persistDraft();
 
     setSaveMessage(`入力内容を保存しました（${formatted}）。`);
   };
-
+const handleMoveToRecipientList = () => {
+    persistDraft();
+    router.push(`/recipient-list?channel=${channel}`);
+  };
 
   const handleBusinessCardChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -478,9 +486,9 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
           <button type="button" className="btn btn-secondary" onClick={handleSaveDraft}>
             入力内容を保存
           </button>
-          <Link href={`/recipient-list?channel=${channel}`} className="btn btn-primary">
+          <button type="button" className="btn btn-primary" onClick={handleMoveToRecipientList}>
             順次送信リスト
-          </Link>
+         </button>
         </div>
         {saveMessage ? (
           <p className="send-notice send-notice-success" role="status" aria-live="polite">
