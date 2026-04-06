@@ -37,6 +37,12 @@ type SavedDraft = {
     url?: string;
     dataUrl?: string;
   }[];
+   uploadedCard?: {
+    name?: string;
+    type?: string;
+    url?: string;
+    dataUrl?: string;
+  };
 };
 
 const cleanList = (value: string) =>
@@ -135,9 +141,22 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
             .map((line) => `<p>${line}</p>`)
             .join("");
 
-          if (faxSummaryText) {
-            setMailBodyText(faxSummaryText);
-            setMailBodyHtml(faxSummaryHtml);
+           const uploadedCardUrl = parsed.uploadedCard?.url ?? parsed.uploadedCard?.dataUrl;
+          const uploadedCardType = parsed.uploadedCard?.type ?? "";
+          const uploadedCardName = parsed.uploadedCard?.name ?? "名刺";
+          const businessCardHtml = uploadedCardUrl
+            ? uploadedCardType.startsWith("image/")
+              ? `<p><strong>名刺:</strong></p><p><img src="${uploadedCardUrl}" alt="${uploadedCardName}" style="max-width:100%;height:auto;border-radius:8px;" /></p>`
+              : `<p><strong>名刺:</strong> <a href="${uploadedCardUrl}" target="_blank" rel="noreferrer">${uploadedCardName}</a></p>`
+            : "";
+
+          if (faxSummaryText || businessCardHtml) {
+            setMailBodyText(
+              [faxSummaryText, uploadedCardUrl ? `名刺: ${uploadedCardName} (${uploadedCardUrl})` : ""]
+                .filter(Boolean)
+                .join("\n"),
+            );
+            setMailBodyHtml(`${faxSummaryHtml}${businessCardHtml}`);
           }
         }
 
