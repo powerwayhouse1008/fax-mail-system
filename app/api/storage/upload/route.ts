@@ -73,9 +73,19 @@ export async function POST(request: Request) {
 
     if (!uploadResponse.ok) {
        let latestErrorBody = await uploadResponse.text();
-      const isBucketNotFound =
-        uploadResponse.status === 404 &&
-        /bucket not found/i.test(latestErrorBody);
+      let parsedError: { statusCode?: number; message?: string } | null = null;
+      try {
+        parsedError = JSON.parse(latestErrorBody) as { statusCode?: number; message?: string };
+      } catch {
+        parsedError = null;
+      }
+
+      const hasBucketNotFoundMessage = /bucket not found/i.test(
+        `${latestErrorBody} ${parsedError?.message ?? ""}`,
+      );
+      const hasBucketNotFoundStatus =
+        uploadResponse.status === 404 || parsedError?.statusCode === 404;
+      const isBucketNotFound = hasBucketNotFoundStatus && hasBucketNotFoundMessage;
 
       if (isBucketNotFound) {
         const createBucketResponse = await fetch(`${config.supabaseUrl}/storage/v1/bucket`, {
