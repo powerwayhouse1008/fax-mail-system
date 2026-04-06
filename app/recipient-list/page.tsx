@@ -186,7 +186,15 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     if (maxLength === 0) {
       setSendMessage({
         type: "error",
-        text: "送信先がありません。FAX番号とGmailアドレスを入力してください。",
+        text: "送信先がありません。FAX番号またはGmailアドレスを1件以上入力してください。",
+      });
+      return;
+    }
+
+    if (gmailAddresses.length === 0 && faxNumbers.length > 0) {
+      setSendMessage({
+        type: "success",
+        text: `${faxNumbers.length}件のFAX送信リストを受け付けました。`,
       });
       return;
     }
@@ -194,7 +202,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     if (gmailAddresses.length === 0) {
       setSendMessage({
         type: "error",
-        text: "Gmailアドレスを1件以上入力してください。",
+        text: "Gmailアドレスを1件以上入力してください（またはFAX番号を入力してください）。",
       });
       return;
     }
