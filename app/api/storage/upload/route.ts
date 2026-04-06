@@ -31,10 +31,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "フォームデータの解析に失敗しました。" }, { status: 400 });
   }
 
-  const file = formData.get("file");
-  if (!(file instanceof File)) {
+ const fileEntry = formData.get("file");
+  if (!fileEntry || typeof fileEntry === "string" || typeof fileEntry.arrayBuffer !== "function") {
     return NextResponse.json({ error: "ファイルが見つかりません。" }, { status: 400 });
   }
+  const file = fileEntry as File;
 
   const scope = safeSegment(String(formData.get("scope") || "guest"));
   const channel = safeSegment(String(formData.get("channel") || "fax"));
