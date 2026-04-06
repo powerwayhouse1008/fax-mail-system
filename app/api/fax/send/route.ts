@@ -11,14 +11,14 @@ type AttachmentPayload = {
 };
 
 export async function POST(request: Request) {
-  const apiUrl = process.env.NEXILINK_FAX_ENDPOINT;
-  const apiKey = process.env.NEXILINK_API_KEY;
+  const apiUrl = process.env.NEXLINK_API_BASE_URL ?? process.env.NEXILINK_FAX_ENDPOINT;
+  const apiToken = process.env.NEXLINK_API_TOKEN ?? process.env.NEXILINK_API_KEY;
   const senderId = process.env.NEXILINK_SENDER_ID;
 
-  if (!apiUrl || !apiKey) {
+  if (!apiUrl || !apiToken) {
     return NextResponse.json(
       {
-        error: "NEXILINK_FAX_ENDPOINT または NEXILINK_API_KEY が未設定です。",
+         error: "NEXLINK_API_BASE_URL または NEXLINK_API_TOKEN が未設定です。",
       },
       { status: 500 },
     );
@@ -102,8 +102,8 @@ export async function POST(request: Request) {
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "X-API-Key": apiKey,
+            Authorization: `Bearer ${apiToken}`,
+            "X-API-Key": apiToken,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
