@@ -30,3 +30,15 @@ RESEND_FROM_EMAIL=onboarding@resend.dev
 ```
 
 `RESEND_FROM_EMAIL` must be a verified sender in your Resend account.
+
+## Fax sending with NexiLink
+
+Set these environment variables before running the app:
+
+```bash
+NEXILINK_FAX_ENDPOINT=https://api.nexilink.example/v1/faxes
+NEXILINK_API_KEY=your_nexilink_api_key
+NEXILINK_SENDER_ID=optional_sender_id
+```
+
+`NEXILINK_SENDER_ID` is optional and depends on your NexiLink contract.
