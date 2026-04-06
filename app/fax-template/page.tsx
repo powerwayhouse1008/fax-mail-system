@@ -216,22 +216,26 @@ useEffect(() => {
     const storageKey = `fax-template-draft:${storageScope}:${channel}`;
     const savedAt = new Date().toISOString();
 
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        content,
-        messageBodyHtml,
-        uploadedCard: uploadedCardUrl
-          ? {
-              name: uploadedCardName,
-              type: uploadedCardType,
-              dataUrl: uploadedCardUrl,
-            }
-          : null,
-         gmailAttachments,
-        savedAt,
-      }),
-    );
+    try {
+      window.localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          content,
+          messageBodyHtml,
+          uploadedCard: uploadedCardUrl
+            ? {
+                name: uploadedCardName,
+                type: uploadedCardType,
+                dataUrl: uploadedCardUrl,
+              }
+            : null,
+          gmailAttachments,
+          savedAt,
+        }),
+      );
+    } catch {
+      return null;
+    }
 
     return new Intl.DateTimeFormat("ja-JP", {
       year: "numeric",
@@ -240,15 +244,21 @@ useEffect(() => {
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(savedAt));
-};
+ };
 
   const handleSaveDraft = () => {
     const formatted = persistDraft();
-
+ if (!formatted) {
+      setSaveMessage("保存に失敗しました。添付ファイルが大きすぎる可能性があります。");
+      return;
+    }
     setSaveMessage(`入力内容を保存しました（${formatted}）。`);
   };
-const handleMoveToRecipientList = () => {
-    persistDraft();
+  const handleMoveToRecipientList = () => {
+      const formatted = persistDraft();
+      if (!formatted) {
+      setSaveMessage("下書き保存に失敗したため、保存せず送信リストへ移動します。");
+    }
     router.push(`/recipient-list?channel=${channel}`);
   };
 
