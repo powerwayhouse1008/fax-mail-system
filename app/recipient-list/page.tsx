@@ -19,13 +19,14 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const channel = searchParams?.channel ?? "fax";
   const [faxListInput, setFaxListInput] = useState("");
   const [gmailListInput, setGmailListInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [sendMessage, setSendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
   const faxNumbers = useMemo(() => cleanList(faxListInput), [faxListInput]);
   const gmailAddresses = useMemo(() => cleanList(gmailListInput), [gmailListInput]);
   const maxLength = Math.max(faxNumbers.length, gmailAddresses.length);
   
-   const handleSend = () => {
+  const handleSend = async () => {
     if (maxLength === 0) {
       setSendMessage({
         type: "error",
@@ -34,10 +35,57 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       return;
     }
 
-    setSendMessage({
-      type: "success",
-      text: `${maxLength}件の送信を開始しました。送信処理は正常に受け付けられました。`,
-    });
+    if (gmailAddresses.length === 0) {
+      setSendMessage({
+        type: "error",
+        text: "Gmailアドレスを1件以上入力してください。",
+      });
+      return;
+    }
+
+    setIsSending(true);
+    setSendMessage(null);
+
+    try {
+      const response = await fetch("/api/gmail/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ emails: gmailAddresses }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setSendMessage({
+          type: "error",
+          text: data?.error ?? "Gmail送信に失敗しました。",
+        });
+        return;
+      }
+
+      const failedCount = Array.isArray(data.failed) ? data.failed.length : 0;
+      if (failedCount > 0) {
+        setSendMessage({
+          type: "error",
+          text: `${data.successCount}件送信成功 / ${failedCount}件送信失敗。`,
+        });
+        return;
+      }
+
+      setSendMessage({
+        type: "success",
+        text: `${data.successCount}件のGmail送信に成功しました。`,
+      });
+    } catch {
+      setSendMessage({
+        type: "error",
+        text: "通信エラーが発生しました。しばらくしてから再度お試しください。",
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -97,8 +145,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
           <Link href={`/fax-template?channel=${channel}`} className="btn btn-secondary">
              テンプレート入力に戻る
           </Link>
-          <button type="button" className="btn btn-primary" onClick={handleSend}>
-            リスト送信を開始
+         <button type="button" className="btn btn-primary" onClick={handleSend} disabled={isSending}>
+            {isSending ? "送信中..." : "リスト送信を開始"}
           </button>
         </div>
       </section>
