@@ -118,11 +118,11 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
           const faxSummaryText = [
             draftContent.to && `TO: ${draftContent.to}`,
             draftContent.from && `FROM: ${draftContent.from}`,
+            draftContent.greeting,
+            draftContent.request,
             draftContent.propertyName && `物件名: ${draftContent.propertyName}`,
             draftContent.preferredDate && `内見希望日: ${draftContent.preferredDate}`,
             draftContent.preferredTime && `内見希望時間: ${draftContent.preferredTime}`,
-            draftContent.greeting,
-            draftContent.request,
             draftContent.contact && `連絡事項: ${draftContent.contact}`,
             messageBody,
             signature,
