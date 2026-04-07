@@ -112,12 +112,29 @@ function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
 
   return candidates;
 }
+function normalizeAuthScheme(value: string): AuthScheme {
+  const normalized = value.trim().replace(/^['"]|['"]$/g, "").toLowerCase();
+  if (
+    normalized === "token" ||
+    normalized === "bearer" ||
+    normalized === "x-api-key" ||
+    normalized === "x-auth-token" ||
+    normalized === "raw"
+  ) {
+    return normalized;
+  }
+
+  return "token";
+}
+
 function normalizeAuthToken(token: string) {
   const trimmed = token.trim();
   if (!trimmed) return "";
 
 
   const normalized = trimmed
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/^['"]|['"]$/g, "")
     .replace(/^authorization\s*:\s*/i, "")
     .replace(/^token\s+token=/i, "")
     .replace(/^token\s+/i, "")
@@ -308,8 +325,9 @@ export async function POST(request: Request) {
     "NEXLINK_API_KEY",
   );
   const senderId = readEnv("NEXILINK_SENDER_ID", "NEXLINK_SENDER_ID");
-  const authScheme = (readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME").toLowerCase() ||
-    "token") as AuthScheme;
+  const authScheme = normalizeAuthScheme(
+    readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME") || "token",
+  );
 
   if (!apiUrl) {
     return NextResponse.json(
