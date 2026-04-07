@@ -59,7 +59,7 @@ function buildAuthHeaders(token: string, scheme: AuthScheme) {
 
   switch (scheme) {
     case "token":
-      return { Authorization: `Token ${trimmed}` };
+       return { Authorization: `token ${trimmed}` };
     case "bearer":
       return { Authorization: `Bearer ${trimmed}` };
     case "x-api-key":
@@ -69,7 +69,8 @@ function buildAuthHeaders(token: string, scheme: AuthScheme) {
     case "raw":
       return { Authorization: trimmed };
     default:
-      return { Authorization: `Token ${trimmed}` };
+     return { Authorization: `Token ${trimmed}` };
+  }
   }
 }
 
