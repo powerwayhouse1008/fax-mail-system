@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
 const MAX_SUBJECT_LENGTH = 200;
+const DEFAULT_DIRECT_SEND_PATH = "/api/v1/facsimiles/direct_send";
 const normalizeFaxNumber = (value: string) => {
   const normalized = value
     .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
@@ -125,9 +126,18 @@ const extractErrorDetail = (status: number, data: unknown, fallbackText: string)
   const baseUrl = process.env.NEXLINK_API_BASE_URL;
   const apiPath = process.env.NEXLINK_API_PATH;
   const endpointUrl = process.env.NEXILINK_FAX_ENDPOINT;
+  const normalizedEndpointUrl = endpointUrl?.trim();
+  const normalizedApiPath = apiPath?.trim();
+  const resolvedApiPath =
+    normalizedApiPath && normalizedApiPath !== "/api/v1/facsimiles"
+      ? normalizedApiPath
+      : DEFAULT_DIRECT_SEND_PATH;
   const apiUrl =
-    endpointUrl ??
-    (baseUrl ? new URL(apiPath ?? "/api/v1/facsimiles", baseUrl).toString() : undefined);
+    normalizedEndpointUrl && normalizedEndpointUrl.length > 0
+      ? normalizedEndpointUrl
+      : baseUrl
+        ? new URL(resolvedApiPath, baseUrl).toString()
+        : undefined;
   const apiToken = process.env.NEXLINK_API_TOKEN ?? process.env.NEXILINK_API_KEY;
   const senderId = process.env.NEXILINK_SENDER_ID;
 
