@@ -37,7 +37,51 @@ type AttachmentPayload = {
   url?: unknown;
   type?: unknown;
 };
+const extractErrorDetail = (status: number, data: unknown, fallbackText: string) => {
+  const detailCandidates: string[] = [];
 
+  if (typeof data === "string" && data.trim()) {
+    detailCandidates.push(data.trim());
+  }
+
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    const directKeys = ["message", "error", "detail", "title"];
+    for (const key of directKeys) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) {
+        detailCandidates.push(value.trim());
+      }
+    }
+
+    if (Array.isArray(record.errors)) {
+      for (const item of record.errors) {
+        if (typeof item === "string" && item.trim()) {
+          detailCandidates.push(item.trim());
+          continue;
+        }
+        if (item && typeof item === "object") {
+          const errorRecord = item as Record<string, unknown>;
+          if (typeof errorRecord.message === "string" && errorRecord.message.trim()) {
+            detailCandidates.push(errorRecord.message.trim());
+          }
+          if (typeof errorRecord.detail === "string" && errorRecord.detail.trim()) {
+            detailCandidates.push(errorRecord.detail.trim());
+          }
+        }
+      }
+    }
+  }
+
+  if (detailCandidates.length > 0) {
+    return detailCandidates.join(" / ");
+  }
+
+  if (fallbackText.trim()) {
+    return fallbackText.trim().slice(0, 300);
+  }
+
+  return `送信エラー (HTTP ${status})`;
 export async function POST(request: Request) {
   const baseUrl = process.env.NEXLINK_API_BASE_URL;
   const apiPath = process.env.NEXLINK_API_PATH;
@@ -154,27 +198,28 @@ export async function POST(request: Request) {
           }),
         });
 
-        const data = await response.json().catch(() => null);
+        const rawBody = await response.text();
+        let data: unknown = null;
+        try {
+          data = rawBody ? JSON.parse(rawBody) : null;
+        } catch {
+          data = null;
+        }
         if (!response.ok) {
-           const detail =
-            typeof data?.message === "string"
-              ? data.message
-              : typeof data?.error === "string"
-                ? data.error
-                : typeof data?.errors?.[0]?.message === "string"
-                  ? data.errors[0].message
-                  : `送信エラー (HTTP ${response.status})`;
+           const detail = extractErrorDetail(response.status, data, rawBody);
           return {
             to: target.original,
             success: false,
-             error: detail,
+            error: detail,
           };
         }
+       const responseId =
+          data && typeof data === "object" && "id" in data ? (data as { id?: unknown }).id : null;
 
         return {
           to: target.original,
           success: true,
-          id: data?.id ?? null,
+          id: responseId,
         };
       }),
     );
