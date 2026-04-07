@@ -80,8 +80,8 @@ function buildAuthHeaders(token: string, scheme: AuthScheme) {
     default:
      return { Authorization: `token ${trimmed}` };
   }
-  }
 }
+
 function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
   if (scheme !== "token") {
     return [buildAuthHeaders(token, scheme)];
@@ -268,8 +268,7 @@ async function resolveAttachments(payload: AttachmentPayload[]) {
 
 export async function POST(request: Request) {
   const apiUrl = getResolvedApiUrl();
-  const apiToken =
-    const apiToken = readEnv(
+  const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
     "NEXILINK_API_KEY",
