@@ -139,6 +139,7 @@ function normalizeAuthToken(token: string) {
     .replace(/^token\s+token=/i, "")
     .replace(/^token\s+/i, "")
     .replace(/^bearer\s+/i, "")
+    .replace(/\s+/g, "")
     .trim();
 
   return normalized || trimmed;
