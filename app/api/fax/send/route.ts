@@ -137,8 +137,8 @@ export async function POST(request: Request) {
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "X-API-Key": apiToken,
+            Accept: "application/json",
+            Authorization: `token ${apiToken}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -153,10 +153,18 @@ export async function POST(request: Request) {
 
         const data = await response.json().catch(() => null);
         if (!response.ok) {
+           const detail =
+            typeof data?.message === "string"
+              ? data.message
+              : typeof data?.error === "string"
+                ? data.error
+                : typeof data?.errors?.[0]?.message === "string"
+                  ? data.errors[0].message
+                  : `送信エラー (HTTP ${response.status})`;
           return {
             to: target.original,
             success: false,
-            error: data?.message ?? "送信エラー",
+             error: detail,
           };
         }
 
