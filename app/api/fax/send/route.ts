@@ -112,9 +112,10 @@ function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
 
   return candidates;
 }
-function normalizeAuthToken(token: string) 
-const trimmed = token.trim();
- if (!trimmed) return "";
+function normalizeAuthToken(token: string) {
+  const trimmed = token.trim();
+  if (!trimmed) return "";
+
 
   const normalized = trimmed
     .replace(/^authorization\s*:\s*/i, "")
@@ -127,7 +128,7 @@ const trimmed = token.trim();
 }
 
 function getResolvedApiUrl() {
- const endpointUrl = readEnv("NEXILINK_FAX_ENDPOINT", "NEXLINK_FAX_ENDPOINT");
+  const endpointUrl = readEnv("NEXILINK_FAX_ENDPOINT", "NEXLINK_FAX_ENDPOINT");
   const baseUrl = readEnv("NEXLINK_API_BASE_URL", "NEXILINK_API_BASE_URL");
   const apiPath = readEnv("NEXLINK_API_PATH", "NEXILINK_API_PATH");
 
