@@ -25,7 +25,10 @@ const normalizeFaxNumber = (value: string) => {
     return "";
   }
 
-  return candidates[0].trim().replace(/\s+/g, "");
+  return candidates[0]
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[()\-]/g, "");
 };
 
 type AttachmentPayload = {
