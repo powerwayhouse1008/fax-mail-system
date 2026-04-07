@@ -3,6 +3,22 @@ import { NextResponse } from "next/server";
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
 const MAX_SUBJECT_LENGTH = 200;
 const DEFAULT_DIRECT_SEND_PATH = "/api/v1/facsimiles/direct_send";
+const buildAuthHeaderCandidates = (rawToken: string) => {
+  const token = rawToken.trim();
+  if (!token) {
+    return [];
+  }
+
+  const candidates: string[] = [];
+  const normalized = token.toLowerCase();
+  if (normalized.startsWith("token ") || normalized.startsWith("bearer ")) {
+    candidates.push(token);
+  } else {
+    candidates.push(`token ${token}`, `Bearer ${token}`, token);
+  }
+
+  return Array.from(new Set(candidates));
+};
 const normalizeFaxNumber = (value: string) => {
   const normalized = value
     .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
@@ -242,48 +258,67 @@ const extractErrorDetail = (status: number, data: unknown, fallbackText: string)
         };
       }),
     );
-
+    
+    const authHeaderCandidates = buildAuthHeaderCandidates(apiToken);
     const results = await Promise.all(
       validFaxTargets.map(async (target) => {
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            Authorization: `token ${apiToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            to: target.normalized,
-            senderId: senderId || undefined,
-            subject,
-            html,
-            text,
-            attachments: attachments.length > 0 ? attachments : undefined,
-          }),
-        });
+        for (let index = 0; index < authHeaderCandidates.length; index += 1) {
+          const authorization = authHeaderCandidates[index];
+          const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              Authorization: authorization,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              to: target.normalized,
+              senderId: senderId || undefined,
+              subject,
+              html,
+              text,
+              attachments: attachments.length > 0 ? attachments : undefined,
+            }),
+          });
 
-        const rawBody = await response.text();
-        let data: unknown = null;
-        try {
-          data = rawBody ? JSON.parse(rawBody) : null;
-        } catch {
-          data = null;
-        }
-        if (!response.ok) {
-           const detail = extractErrorDetail(response.status, data, rawBody);
+          const rawBody = await response.text();
+          let data: unknown = null;
+          try {
+            data = rawBody ? JSON.parse(rawBody) : null;
+          } catch {
+            data = null;
+          }
+
+          const isRetryableUnauthorized =
+            response.status === 401 && index < authHeaderCandidates.length - 1;
+          if (isRetryableUnauthorized) {
+            continue;
+          }
+
+          if (!response.ok) {
+            const detail = extractErrorDetail(response.status, data, rawBody);
+            return {
+              to: target.original,
+              success: false,
+              error: detail,
+            };
+          }
+
+          const responseId =
+            data && typeof data === "object" && "id" in data ? (data as { id?: unknown }).id : null;
+
+        
           return {
             to: target.original,
-            success: false,
-            error: detail,
+            success: true,
+            id: responseId,
           };
         }
-       const responseId =
-          data && typeof data === "object" && "id" in data ? (data as { id?: unknown }).id : null;
 
         return {
           to: target.original,
-          success: true,
-          id: responseId,
+           success: false,
+          error: "送信エラー (認証ヘッダーの生成に失敗しました)",
         };
       }),
     );
