@@ -269,6 +269,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       const gmailSuccessCount = typeof gmailData?.successCount === "number" ? gmailData.successCount : 0;
       const faxFailedCount = Array.isArray(faxData?.failed) ? faxData.failed.length : 0;
       const gmailFailedCount = Array.isArray(gmailData?.failed) ? gmailData.failed.length : 0;
+       const faxTotalCount = typeof faxData?.total === "number" ? faxData.total : faxNumbers.length;
+      const gmailTotalCount = typeof gmailData?.total === "number" ? gmailData.total : gmailAddresses.length;
       const totalSuccess = faxSuccessCount + gmailSuccessCount;
       const totalFailed = faxFailedCount + gmailFailedCount;
 
@@ -278,11 +280,22 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       ].filter((value): value is string => Boolean(value));
       
       if (errorMessages.length > 0 || totalFailed > 0) {
+         const firstFaxError =
+          Array.isArray(faxData?.failed) && typeof faxData.failed[0]?.error === "string"
+            ? faxData.failed[0].error
+            : null;
+        const firstGmailError =
+          Array.isArray(gmailData?.failed) && typeof gmailData.failed[0]?.error === "string"
+            ? gmailData.failed[0].error
+            : null;
+
         setSendMessage({
           type: "error",
           text:
             errorMessages[0] ??
-            `送信結果: 成功 ${totalSuccess}件 / 失敗 ${totalFailed}件（FAX ${faxSuccessCount}/${faxFailedCount}, Gmail ${gmailSuccessCount}/${gmailFailedCount}）`,
+           `送信結果: 成功 ${totalSuccess}件 / 失敗 ${totalFailed}件（FAX ${faxSuccessCount}/${faxTotalCount}, Gmail ${gmailSuccessCount}/${gmailTotalCount}）${
+              firstFaxError || firstGmailError ? ` / 詳細: ${firstFaxError ?? firstGmailError}` : ""
+            }`,
         });
         return;
       }
