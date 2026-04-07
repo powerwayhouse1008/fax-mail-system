@@ -3,21 +3,47 @@ import { NextResponse } from "next/server";
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
 const MAX_SUBJECT_LENGTH = 200;
 const DEFAULT_DIRECT_SEND_PATH = "/api/v1/facsimiles/direct_send";
+type AuthHeaderSet = {
+  Authorization?: string;
+  "X-API-KEY"?: string;
+  "X-Auth-Token"?: string;
+};
+
 const buildAuthHeaderCandidates = (rawToken: string) => {
   const token = rawToken.trim();
   if (!token) {
     return [];
   }
 
-  const candidates: string[] = [];
+  const candidates: AuthHeaderSet[] = [];
   const normalized = token.toLowerCase();
   if (normalized.startsWith("token ") || normalized.startsWith("bearer ")) {
-    candidates.push(token);
+    const rawValue = token.replace(/^(token|bearer)\s+/i, "").trim();
+    candidates.push({ Authorization: token });
+    if (rawValue) {
+      candidates.push({ "X-API-KEY": rawValue }, { "X-Auth-Token": rawValue });
+    }
   } else {
-    candidates.push(`token ${token}`, `Bearer ${token}`, token);
+    candidates.push(
+      { Authorization: `token ${token}` },
+      { Authorization: `Token ${token}` },
+      { Authorization: `Token token=${token}` },
+      { Authorization: `Bearer ${token}` },
+      { Authorization: token },
+      { "X-API-KEY": token },
+      { "X-Auth-Token": token },
+    );
   }
 
-  return Array.from(new Set(candidates));
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    const key = JSON.stringify(candidate);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 };
 const normalizeFaxNumber = (value: string) => {
   const normalized = value
@@ -263,13 +289,13 @@ const extractErrorDetail = (status: number, data: unknown, fallbackText: string)
     const results = await Promise.all(
       validFaxTargets.map(async (target) => {
         for (let index = 0; index < authHeaderCandidates.length; index += 1) {
-          const authorization = authHeaderCandidates[index];
+           const authHeaders = authHeaderCandidates[index];
           const response = await fetch(apiUrl, {
             method: "POST",
             headers: {
               Accept: "application/json",
-              Authorization: authorization,
               "Content-Type": "application/json",
+              ...authHeaders,
             },
             body: JSON.stringify({
               to: target.normalized,
