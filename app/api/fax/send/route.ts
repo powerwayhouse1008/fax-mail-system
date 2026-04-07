@@ -115,8 +115,23 @@ const extractErrorDetail = (status: number, data: unknown, fallbackText: string)
     return detailCandidates.join(" / ");
   }
 
-  if (fallbackText.trim()) {
-    return fallbackText.trim().slice(0, 300);
+  const trimmedFallbackText = fallbackText.trim();
+  if (trimmedFallbackText) {
+    try {
+      const parsedFallback = JSON.parse(trimmedFallbackText) as unknown;
+      if (parsedFallback && typeof parsedFallback === "object") {
+        const fallbackRecord = parsedFallback as Record<string, unknown>;
+        const fallbackKeys = ["message", "error", "detail", "title"];
+        for (const key of fallbackKeys) {
+          const value = fallbackRecord[key];
+          if (typeof value === "string" && value.trim()) {
+            return value.trim().slice(0, 300);
+          }
+        }
+      }
+    } catch {
+      return trimmedFallbackText.slice(0, 300);
+    }
   }
 
   return `送信エラー (HTTP ${status})`;
