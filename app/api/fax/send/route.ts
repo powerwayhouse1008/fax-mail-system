@@ -83,15 +83,34 @@ function buildAuthHeaders(token: string, scheme: AuthScheme) {
 }
 
 function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
+  const trimmed = token.trim();
+  const dedupe = new Set<string>();
+  const candidates: Array<Record<string, string>> = [];
+
+  const pushCandidate = (headers: Record<string, string>) => {
+    const key = JSON.stringify(
+      Object.entries(headers).sort(([a], [b]) => a.localeCompare(b)),
+    );
+    if (dedupe.has(key)) return;
+    dedupe.add(key);
+    candidates.push(headers);
+  };
+
   if (scheme !== "token") {
-    return [buildAuthHeaders(token, scheme)];
+    pushCandidate(buildAuthHeaders(token, scheme));
+    return candidates;
   }
 
-  const trimmed = token.trim();
-  return [
-    { Authorization: `token ${trimmed}` },
-    { Authorization: `Token ${trimmed}` },
-  ];
+  // NexiLink environments are inconsistent about auth header requirements.
+  // Try the common variants before failing on HTTP 401.
+  pushCandidate({ Authorization: `token ${trimmed}` });
+  pushCandidate({ Authorization: `Token ${trimmed}` });
+  pushCandidate({ Authorization: `Bearer ${trimmed}` });
+  pushCandidate({ Authorization: `Token token=${trimmed}` });
+  pushCandidate({ "X-API-KEY": trimmed });
+  pushCandidate({ "X-Auth-Token": trimmed });
+
+  return candidates;
 }
 
 function getResolvedApiUrl() {
