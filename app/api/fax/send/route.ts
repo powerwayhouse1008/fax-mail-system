@@ -64,7 +64,7 @@ function normalizeFaxNumber(value: string) {
 }
 
 function buildAuthHeaders(token: string, scheme: AuthScheme) {
-  const trimmed = token.trim();
+  const trimmed = normalizeAuthToken(token);
 
   switch (scheme) {
     case "token":
@@ -76,14 +76,14 @@ function buildAuthHeaders(token: string, scheme: AuthScheme) {
     case "x-auth-token":
       return { "X-Auth-Token": trimmed };
     case "raw":
-      return { Authorization: trimmed };
+       return { Authorization: token.trim() };
     default:
      return { Authorization: `token ${trimmed}` };
   }
 }
 
 function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
-  const trimmed = token.trim();
+   const trimmed = normalizeAuthToken(token);
   const dedupe = new Set<string>();
   const candidates: Array<Record<string, string>> = [];
 
@@ -111,6 +111,19 @@ function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
   pushCandidate({ "X-Auth-Token": trimmed });
 
   return candidates;
+}
+function normalizeAuthToken(token: string) 
+const trimmed = token.trim();
+ if (!trimmed) return "";
+
+  const normalized = trimmed
+    .replace(/^authorization\s*:\s*/i, "")
+    .replace(/^token\s+token=/i, "")
+    .replace(/^token\s+/i, "")
+    .replace(/^bearer\s+/i, "")
+    .trim();
+
+  return normalized || trimmed;
 }
 
 function getResolvedApiUrl() {
