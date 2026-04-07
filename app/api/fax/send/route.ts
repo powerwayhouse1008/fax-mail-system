@@ -109,7 +109,10 @@ function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
   pushCandidate({ Authorization: `Token token=${trimmed}` });
   pushCandidate({ "X-API-KEY": trimmed });
   pushCandidate({ "X-Auth-Token": trimmed });
-
+  pushCandidate({ token: trimmed });
+  pushCandidate({ "Api-Token": trimmed });
+  pushCandidate({ "api-token": trimmed });
+  pushCandidate({ "access-token": trimmed });
   return candidates;
 }
 function normalizeAuthScheme(value: string): AuthScheme {
