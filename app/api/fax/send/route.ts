@@ -179,7 +179,25 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
   }
 
   const text = fallbackText.trim();
-  if (text) return text.slice(0, 500);
+  if (text) {
+    try {
+      const parsed = JSON.parse(text) as unknown;
+      if (parsed && typeof parsed === "object") {
+        const record = parsed as Record<string, unknown>;
+        const candidates = ["message", "error", "detail", "title"]
+          .map((key) => record[key])
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean);
+
+        if (candidates.length > 0) {
+          return candidates.join(" / ").slice(0, 500);
+        }
+      }
+    } catch {
+      return text.slice(0, 500);
+    }
+  }
 
   if (status === 401) {
     return "認証エラー (HTTP 401) : APIトークン、認証ヘッダー形式、またはAPI URLをご確認ください。";
