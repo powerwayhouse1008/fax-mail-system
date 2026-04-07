@@ -25,6 +25,15 @@ type SendResult =
   | { to: string; success: true; id: unknown; raw?: unknown }
   | { to: string; success: false; error: string; raw?: unknown };
 
+function readEnv(...keys: string[]) {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+
 function normalizeFaxNumber(value: string) {
   const normalized = value
     .replace(/[０-９]/g, (char) =>
@@ -69,15 +78,26 @@ function buildAuthHeaders(token: string, scheme: AuthScheme) {
     case "raw":
       return { Authorization: trimmed };
     default:
-     return { Authorization: `Token ${trimmed}` };
+     return { Authorization: `token ${trimmed}` };
   }
   }
 }
+function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
+  if (scheme !== "token") {
+    return [buildAuthHeaders(token, scheme)];
+  }
+
+  const trimmed = token.trim();
+  return [
+    { Authorization: `token ${trimmed}` },
+    { Authorization: `Token ${trimmed}` },
+  ];
+}
 
 function getResolvedApiUrl() {
-  const endpointUrl = process.env.NEXILINK_FAX_ENDPOINT?.trim();
-  const baseUrl = process.env.NEXLINK_API_BASE_URL?.trim();
-  const apiPath = process.env.NEXLINK_API_PATH?.trim();
+ const endpointUrl = readEnv("NEXILINK_FAX_ENDPOINT", "NEXLINK_FAX_ENDPOINT");
+  const baseUrl = readEnv("NEXLINK_API_BASE_URL", "NEXILINK_API_BASE_URL");
+  const apiPath = readEnv("NEXLINK_API_PATH", "NEXILINK_API_PATH");
 
   // 1) Nếu có full endpoint thì dùng luôn
   if (endpointUrl) {
@@ -249,11 +269,14 @@ async function resolveAttachments(payload: AttachmentPayload[]) {
 export async function POST(request: Request) {
   const apiUrl = getResolvedApiUrl();
   const apiToken =
-    process.env.NEXLINK_API_TOKEN?.trim() ||
-    process.env.NEXILINK_API_KEY?.trim() ||
-    "";
-  const senderId = process.env.NEXILINK_SENDER_ID?.trim() || "";
-  const authScheme = (process.env.NEXLINK_AUTH_SCHEME?.trim().toLowerCase() ||
+    const apiToken = readEnv(
+    "NEXLINK_API_TOKEN",
+    "NEXILINK_API_TOKEN",
+    "NEXILINK_API_KEY",
+    "NEXLINK_API_KEY",
+  );
+  const senderId = readEnv("NEXILINK_SENDER_ID", "NEXLINK_SENDER_ID");
+  const authScheme = (readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME").toLowerCase() ||
     "token") as AuthScheme;
 
   if (!apiUrl) {
