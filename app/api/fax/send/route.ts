@@ -82,7 +82,16 @@ function buildAuthHeaders(token: string, scheme: AuthScheme) {
   }
 }
 
-function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
+function buildBasicAuthValue(username: string, password: string) {
+  if (!username || !password) return "";
+  return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+}
+
+function buildAuthHeaderCandidates(
+  token: string,
+  scheme: AuthScheme,
+  basicAuthValue = "",
+) {
    const trimmed = normalizeAuthToken(token);
   const dedupe = new Set<string>();
   const candidates: Array<Record<string, string>> = [];
@@ -98,6 +107,9 @@ function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
 
   if (scheme !== "token") {
     pushCandidate(buildAuthHeaders(token, scheme));
+    if (basicAuthValue) {
+      pushCandidate({ Authorization: basicAuthValue });
+    }
     return candidates;
   }
 
@@ -332,6 +344,18 @@ export async function POST(request: Request) {
     "NEXLINK_API_KEY",
   );
   const senderId = readEnv("NEXILINK_SENDER_ID", "NEXLINK_SENDER_ID");
+ const apiLoginId = readEnv(
+    "NEXLINK_API_LOGIN_ID",
+    "NEXILINK_API_LOGIN_ID",
+    "NEXLINK_API_USER",
+    "NEXILINK_API_USER",
+  );
+  const apiPassword = readEnv(
+    "NEXLINK_API_PASSWORD",
+    "NEXILINK_API_PASSWORD",
+    "NEXLINK_API_PASS",
+    "NEXILINK_API_PASS",
+  );
   const authScheme = normalizeAuthScheme(
     readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME") || "token",
   );
@@ -421,7 +445,12 @@ export async function POST(request: Request) {
 
   try {
     const attachments = await resolveAttachments(attachmentsPayload);
-    const authHeaderCandidates = buildAuthHeaderCandidates(apiToken, authScheme);
+    const basicAuthValue = buildBasicAuthValue(apiLoginId, apiPassword);
+    const authHeaderCandidates = buildAuthHeaderCandidates(
+      apiToken,
+      authScheme,
+      basicAuthValue,
+    );
 
     const results: SendResult[] = await Promise.all(
       validFaxTargets.map(async (target) => {
