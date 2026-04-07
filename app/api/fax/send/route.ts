@@ -82,7 +82,9 @@ const extractErrorDetail = (status: number, data: unknown, fallbackText: string)
   }
 
   return `送信エラー (HTTP ${status})`;
-export async function POST(request: Request) {
+  };
+  
+  export async function POST(request: Request) {
   const baseUrl = process.env.NEXLINK_API_BASE_URL;
   const apiPath = process.env.NEXLINK_API_PATH;
   const endpointUrl = process.env.NEXILINK_FAX_ENDPOINT;
