@@ -12,8 +12,11 @@ type AttachmentPayload = {
 
 export async function POST(request: Request) {
   const baseUrl = process.env.NEXLINK_API_BASE_URL;
+  const apiPath = process.env.NEXLINK_API_PATH;
   const endpointUrl = process.env.NEXILINK_FAX_ENDPOINT;
-  const apiUrl = endpointUrl ?? (baseUrl ? new URL("/v1/faxes", baseUrl).toString() : undefined);
+  const apiUrl =
+    endpointUrl ??
+    (baseUrl ? new URL(apiPath ?? "/api/v1/facsimiles", baseUrl).toString() : undefined);
   const apiToken = process.env.NEXLINK_API_TOKEN ?? process.env.NEXILINK_API_KEY;
   const senderId = process.env.NEXILINK_SENDER_ID;
 
