@@ -107,6 +107,9 @@ function buildAuthHeaderCandidates(token: string, scheme: AuthScheme) {
   pushCandidate({ Authorization: `Token ${trimmed}` });
   pushCandidate({ Authorization: `Bearer ${trimmed}` });
   pushCandidate({ Authorization: `Token token=${trimmed}` });
+  pushCandidate({ Authorization: `Token token=\"${trimmed}\"` });
+  pushCandidate({ Authorization: `token=${trimmed}` });
+  pushCandidate({ Authorization: trimmed });
   pushCandidate({ "X-API-KEY": trimmed });
   pushCandidate({ "X-Auth-Token": trimmed });
   pushCandidate({ token: trimmed });
