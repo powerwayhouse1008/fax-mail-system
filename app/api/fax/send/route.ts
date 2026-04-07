@@ -39,13 +39,17 @@ type AttachmentPayload = {
 };
 const extractErrorDetail = (status: number, data: unknown, fallbackText: string) => {
   const detailCandidates: string[] = [];
-
+  let applicationErrorCode = "";
+  
   if (typeof data === "string" && data.trim()) {
     detailCandidates.push(data.trim());
   }
 
   if (data && typeof data === "object") {
     const record = data as Record<string, unknown>;
+    if (typeof record.application_error_code === "string" && record.application_error_code.trim()) {
+      applicationErrorCode = record.application_error_code.trim();
+    }
     const directKeys = ["message", "error", "detail", "title"];
     for (const key of directKeys) {
       const value = record[key];
@@ -71,8 +75,41 @@ const extractErrorDetail = (status: number, data: unknown, fallbackText: string)
         }
       }
     }
-  }
+    
+    if (Array.isArray(record.details)) {
+      for (const item of record.details) {
+        if (!item || typeof item !== "object") {
+          continue;
+        }
+        const detailRecord = item as Record<string, unknown>;
+        const parameter = typeof detailRecord.parameter === "string" ? detailRecord.parameter.trim() : "";
+        const message = typeof detailRecord.message === "string" ? detailRecord.message.trim() : "";
 
+        if (parameter && message) {
+          detailCandidates.push(`${parameter}: ${message}`);
+        } else if (message) {
+          detailCandidates.push(message);
+        }
+      }
+    }
+
+    if (
+      applicationErrorCode === "0080001" &&
+      Array.isArray(record.details) &&
+      record.details.some((item) => {
+        if (!item || typeof item !== "object") {
+          return false;
+        }
+        const parameter = (item as Record<string, unknown>).parameter;
+        return parameter === "contact_list" || parameter === "contact_list_id";
+      })
+    ) {
+      detailCandidates.unshift(
+        "NexiLink API の送信先設定エラーです。contact_list_id が必要なエンドポイントが指定されています。NEXLINK_API_PATH または NEXILINK_FAX_ENDPOINT を直接送信用エンドポイントに変更してください。",
+      );
+    }
+  }
+  
   if (detailCandidates.length > 0) {
     return detailCandidates.join(" / ");
   }
