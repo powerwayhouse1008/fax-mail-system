@@ -364,7 +364,7 @@ export async function POST(request: Request) {
 
   try {
     const attachments = await resolveAttachments(attachmentsPayload);
-    const authHeaders = buildAuthHeaders(apiToken, authScheme);
+    const authHeaderCandidates = buildAuthHeaderCandidates(apiToken, authScheme);
 
     const results: SendResult[] = await Promise.all(
       validFaxTargets.map(async (target) => {
@@ -377,24 +377,44 @@ export async function POST(request: Request) {
           attachments: attachments.length > 0 ? attachments : undefined,
         };
 
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            ...authHeaders,
-          },
-          body: JSON.stringify(requestBody),
+        let response: Response | null = null;
+        let rawBody = "";
           cache: "no-store",
         });
 
         const rawBody = await response.text();
         let data: unknown = null;
 
-        try {
-          data = rawBody ? JSON.parse(rawBody) : null;
-        } catch {
-          data = rawBody || null;
+       for (let i = 0; i < authHeaderCandidates.length; i += 1) {
+          response = await fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+              ...authHeaderCandidates[i],
+            },
+            body: JSON.stringify(requestBody),
+            cache: "no-store",
+          });
+
+          rawBody = await response.text();
+          try {
+            data = rawBody ? JSON.parse(rawBody) : null;
+          } catch {
+            data = rawBody || null;
+          }
+
+          if (response.status !== 401 || i === authHeaderCandidates.length - 1) {
+            break;
+          }
+        }
+
+        if (!response) {
+          return {
+            to: target.original,
+            success: false,
+            error: "送信エラー: APIレスポンスを取得できませんでした。",
+          };
         }
 
         if (!response.ok) {
