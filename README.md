@@ -36,8 +36,9 @@ RESEND_FROM_EMAIL=onboarding@resend.dev
 Set these environment variables before running the app:
 
 ```bash
-NEXILINK_FAX_ENDPOINT=https://api.nexilink.example/v1/faxes
+
 NEXLINK_API_BASE_URL=https://sandbox-hea.nexlink2.jp
+NEXLINK_API_PATH=/api/v1/facsimiles
 NEXLINK_API_TOKEN=
 ```
 
