@@ -2,6 +2,31 @@ import { NextResponse } from "next/server";
 
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
 const MAX_SUBJECT_LENGTH = 200;
+const normalizeFaxNumber = (value: string) => {
+  const normalized = value
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/[＋－（）]/g, (char) => {
+      switch (char) {
+        case "＋":
+          return "+";
+        case "－":
+          return "-";
+        case "（":
+          return "(";
+        case "）":
+          return ")";
+        default:
+          return char;
+      }
+    });
+
+  const candidates = normalized.match(/[+()0-9][0-9+\-()\s]{5,29}/g);
+  if (!candidates || candidates.length === 0) {
+    return "";
+  }
+
+  return candidates[0].trim().replace(/\s+/g, "");
+};
 
 type AttachmentPayload = {
   filename?: unknown;
@@ -48,9 +73,14 @@ export async function POST(request: Request) {
         .filter((item): item is string => typeof item === "string")
         .map((item) => item.trim())
     : [];
-  const validFaxNumbers = faxNumbers.filter((faxNumber) => faxPattern.test(faxNumber));
+   const validFaxTargets = faxNumbers
+    .map((original) => ({
+      original,
+      normalized: normalizeFaxNumber(original),
+    }))
+    .filter((item) => faxPattern.test(item.normalized));
 
-  if (validFaxNumbers.length === 0) {
+  if (validFaxTargets.length === 0) {
     return NextResponse.json({ error: "有効なFAX番号がありません。" }, { status: 400 });
   }
 
@@ -103,7 +133,7 @@ export async function POST(request: Request) {
     );
 
     const results = await Promise.all(
-      validFaxNumbers.map(async (to) => {
+      validFaxTargets.map(async (target) => {
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: {
@@ -112,7 +142,7 @@ export async function POST(request: Request) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            to,
+            to: target.normalized,
             senderId: senderId || undefined,
             subject,
             html,
@@ -124,14 +154,14 @@ export async function POST(request: Request) {
         const data = await response.json().catch(() => null);
         if (!response.ok) {
           return {
-            to,
+            to: target.original,
             success: false,
             error: data?.message ?? "送信エラー",
           };
         }
 
         return {
-          to,
+          to: target.original,
           success: true,
           id: data?.id ?? null,
         };
@@ -142,7 +172,7 @@ export async function POST(request: Request) {
     const failed = results.filter((item) => !item.success);
 
     return NextResponse.json({
-      total: validFaxNumbers.length,
+      total: validFaxTargets.length,
       successCount,
       failed,
     });
