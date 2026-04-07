@@ -378,10 +378,7 @@ export async function POST(request: Request) {
 
         let response: Response | null = null;
         let rawBody = "";
-          cache: "no-store",
-        });
-
-        const rawBody = await response.text();
+         
         let data: unknown = null;
 
        for (let i = 0; i < authHeaderCandidates.length; i += 1) {
