@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 const DIRECT_SEND_PATH = "/api/v1/facsimiles/direct_send";
 const MAX_SUBJECT_LENGTH = 200;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
+const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
+const MAX_RETRY_ATTEMPTS = 3;
 
 type AuthScheme = "token" | "bearer" | "x-api-key" | "x-auth-token" | "raw";
 
@@ -202,6 +204,36 @@ function normalizeErrorText(value: string) {
   }
 
   return trimmed;
+}
+function parseRetryAfterMs(retryAfterHeader: string | null) {
+  if (!retryAfterHeader) return 0;
+
+  const seconds = Number(retryAfterHeader);
+  if (!Number.isNaN(seconds) && Number.isFinite(seconds) && seconds > 0) {
+    return Math.max(0, Math.round(seconds * 1000));
+  }
+
+  const retryAt = Date.parse(retryAfterHeader);
+  if (Number.isNaN(retryAt)) return 0;
+  return Math.max(0, retryAt - Date.now());
+}
+
+function computeRetryDelayMs(attempt: number, retryAfterHeader: string | null) {
+  const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+  if (retryAfterMs > 0) {
+    return Math.min(retryAfterMs, 10_000);
+  }
+
+  const baseDelay = 500;
+  const jitter = Math.floor(Math.random() * 250);
+  const exponentialDelay = baseDelay * 2 ** attempt;
+  return Math.min(exponentialDelay + jitter, 5_000);
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
@@ -494,25 +526,61 @@ export async function POST(request: Request) {
         let data: unknown = null;
 
        for (let i = 0; i < authHeaderCandidates.length; i += 1) {
-          response = await fetch(apiUrl, {
-            method: "POST",
-            headers: {
-              Accept: "application/json",
-              "Content-Type": "application/json",
-              ...authHeaderCandidates[i],
-            },
-            body: JSON.stringify(requestBody),
-            cache: "no-store",
-          });
+          let lastFetchError: unknown = null;
+          for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
+            try {
+              response = await fetch(apiUrl, {
+                method: "POST",
+                headers: {
+                  Accept: "application/json",
+                  "Content-Type": "application/json",
+                  ...authHeaderCandidates[i],
+                },
+                body: JSON.stringify(requestBody),
+                cache: "no-store",
+              });
+            } catch (fetchError) {
+              lastFetchError = fetchError;
+              if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+                await sleep(computeRetryDelayMs(attempt, null));
+                continue;
+              }
+              break;
+            }
 
-          rawBody = await response.text();
-          try {
-            data = rawBody ? JSON.parse(rawBody) : null;
-          } catch {
-            data = rawBody || null;
+            rawBody = await response.text();
+            try {
+              data = rawBody ? JSON.parse(rawBody) : null;
+            } catch {
+              data = rawBody || null;
+            }
+
+            if (
+              RETRYABLE_STATUS_CODES.has(response.status) &&
+              attempt < MAX_RETRY_ATTEMPTS - 1
+            ) {
+              await sleep(
+                computeRetryDelayMs(attempt, response.headers.get("retry-after")),
+              );
+              continue;
+            }
+
+            break;
           }
 
-          if (response.status !== 401 || i === authHeaderCandidates.length - 1) {
+          if (!response && lastFetchError) {
+            const message =
+              lastFetchError instanceof Error
+                ? lastFetchError.message
+                : "相手先サービスに接続できませんでした。";
+            return {
+              to: target.original,
+              success: false,
+              error: `送信エラー: ${message}`,
+            };
+          }
+
+          if (response?.status !== 401 || i === authHeaderCandidates.length - 1) {
             break;
           }
         }
