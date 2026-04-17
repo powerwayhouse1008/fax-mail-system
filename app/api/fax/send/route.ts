@@ -187,13 +187,32 @@ function getResolvedApiUrl() {
 function isContactListEndpoint(url: string) {
   return /contact|list/i.test(url) && !/direct_send/i.test(url);
 }
+function normalizeErrorText(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  if (/<\/?[a-z][\s\S]*>/i.test(trimmed)) {
+    const withoutTags = trimmed
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return withoutTags;
+  }
+
+  return trimmed;
+}
 
 function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
   const details: string[] = [];
   let applicationErrorCode = "";
 
   if (typeof data === "string" && data.trim()) {
-    details.push(data.trim());
+    const normalized = normalizeErrorText(data);
+    if (normalized) {
+      details.push(normalized);
+    }
   }
 
   if (data && typeof data === "object") {
@@ -285,8 +304,14 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
         }
       }
     } catch {
-      return text.slice(0, 500);
+      const normalized = normalizeErrorText(text);
+      if (normalized) {
+        return normalized.slice(0, 500);
+      }
     }
+  }
+  if (status === 503) {
+    return "相手先サービスが一時的に利用できません (HTTP 503)。しばらくして再試行してください。";
   }
 
   if (status === 401) {
