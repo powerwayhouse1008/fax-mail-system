@@ -205,6 +205,56 @@ function normalizeErrorText(value: string) {
 
   return trimmed;
 }
+function formatFetchErrorDetail(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "相手先サービスに接続できませんでした。";
+  }
+
+  const messages = new Set<string>();
+  const pushMessage = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const normalized = value.trim();
+    if (normalized) {
+      messages.add(normalized);
+    }
+  };
+
+  pushMessage(error.message);
+
+  let current: unknown = (error as { cause?: unknown }).cause;
+  let depth = 0;
+  while (current && depth < 4) {
+    if (current instanceof Error) {
+      pushMessage(current.message);
+      current = (current as { cause?: unknown }).cause;
+      depth += 1;
+      continue;
+    }
+
+    if (typeof current === "object") {
+      const code =
+        "code" in current && typeof current.code === "string"
+          ? current.code
+          : "";
+      const message =
+        "message" in current && typeof current.message === "string"
+          ? current.message
+          : "";
+      if (code && message) {
+        pushMessage(`${code}: ${message}`);
+      } else {
+        pushMessage(code || message);
+      }
+    } else {
+      pushMessage(current);
+    }
+
+    break;
+  }
+
+  const merged = Array.from(messages).join(" / ");
+  return merged || "相手先サービスに接続できませんでした。";
+}
 function parseRetryAfterMs(retryAfterHeader: string | null) {
   if (!retryAfterHeader) return 0;
 
@@ -569,10 +619,8 @@ export async function POST(request: Request) {
           }
 
           if (!response && lastFetchError) {
-            const message =
-              lastFetchError instanceof Error
-                ? lastFetchError.message
-                : "相手先サービスに接続できませんでした。";
+            const message = formatFetchErrorDetail(lastFetchError);
+            
             return {
               to: target.original,
               success: false,
