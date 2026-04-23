@@ -315,6 +315,10 @@ async function createFacsimile(params: {
     body: JSON.stringify({
       delivery_name: params.deliveryName,
       contact_list_id: params.contactListId,
+       // Some Nexlink environments validate `contact_list` (not only `contact_list_id`).
+      // Send both keys to avoid validation errors like:
+      // "contact_list: Contact listを入力してください。"
+      contact_list: params.contactListId,
     }),
   });
 }
