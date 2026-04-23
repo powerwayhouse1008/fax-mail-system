@@ -64,50 +64,19 @@ function normalizeFaxNumber(value: string) {
 }
 
 function normalizeAuthToken(token: string) {
-  const normalized = token
+  return token
     .trim()
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/`/g, "")
     .replace(/^['"]|['"]$/g, "")
     .replace(/^authorization\s*:\s*/i, "")
-    .replace(/^token\s*[:\s]\s*/i, "")
-    .replace(/^bearer\s+/i, "")
+    .replace(/^token\s+/i, "")
     .trim();
-
-  return normalized.replace(/\s+/g, "");
 }
 
-function isPlaceholderToken(token: string) {
-  const upper = token.toUpperCase();
-  return (
-    upper === "YOUR_API_TOKEN" ||
-    upper.includes("YOUR_API_TOKEN") ||
-    upper.includes("API_TOKEN_HERE") ||
-    upper.includes("REPLACE_ME")
-  );
- }
-
-function normalizeAuthScheme(value: string) {
-  const normalized = value
-    .trim()
-    .replace(/^authorization\s*:\s*/i, "")
-    .replace(/^['"]|['"]$/g, "");
-
-  if (!normalized) return "token";
-
-  const firstChunk = normalized.split(/\s+/)[0]?.toLowerCase() || "token";
-  if (firstChunk === "token" || firstChunk === "bearer") {
-    return firstChunk;
-  }
-
-  return "token";
-}
-
-function buildAuthHeader(token: string, scheme = "token") {
+function buildAuthHeader(token: string) {
   const trimmed = normalizeAuthToken(token);
-  if (!trimmed) return {};
   return {
-    Authorization: `${scheme} ${trimmed}`,
+    Authorization: `token ${trimmed}`,
   };
 }
 
@@ -127,14 +96,79 @@ function normalizeErrorText(value: string) {
   return trimmed;
 }
 
-function isLikelyNotFoundHtml(body: string) {
-  const normalized = normalizeErrorText(body).toLowerCase();
-  return (
-    normalized.includes("not found") ||
-    normalized.includes("404") ||
-    normalized.includes("お探しのページが見つかりませんでした") ||
-    normalized.includes("ページが見つかりませんでした")
-  );
+function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
+  const details: string[] = [];
+
+  if (typeof data === "string") {
+    const normalized = normalizeErrorText(data);
+    if (normalized) return normalized;
+  }
+
+  if (data && typeof data === "object") {
+    const record = data as Record<string, unknown>;
+
+    for (const key of ["message", "error", "detail", "title"]) {
+      const value = record[key];
+      if (typeof value === "string" && value.trim()) {
+        details.push(`${key}: ${value.trim()}`);
+      }
+    }
+
+    if (typeof record.application_error_code === "string" && record.application_error_code.trim()) {
+      details.unshift(`application_error_code: ${record.application_error_code.trim()}`);
+    }
+
+    if (Array.isArray(record.errors)) {
+      for (const item of record.errors) {
+        if (typeof item === "string" && item.trim()) {
+          details.push(item.trim());
+          continue;
+        }
+        if (item && typeof item === "object") {
+          const r = item as Record<string, unknown>;
+          if (typeof r.message === "string" && r.message.trim()) {
+            details.push(r.message.trim());
+          }
+          if (typeof r.detail === "string" && r.detail.trim()) {
+            details.push(r.detail.trim());
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(record.details)) {
+      for (const item of record.details) {
+        if (!item || typeof item !== "object") continue;
+        const r = item as Record<string, unknown>;
+        const parameter =
+          typeof r.parameter === "string" ? r.parameter.trim() : "";
+        const message =
+          typeof r.message === "string" ? r.message.trim() : "";
+
+        if (parameter && message) details.push(`${parameter}: ${message}`);
+        else if (message) details.push(message);
+      }
+    }
+
+    if (details.length > 0) {
+      return details.join(" / ");
+    }
+
+    return `RAW_JSON: ${JSON.stringify(record)}`;
+  }
+
+  const normalizedFallback = normalizeErrorText(fallbackText);
+  if (normalizedFallback) return normalizedFallback;
+
+  if (status === 401) {
+    return "認証エラー (HTTP 401)";
+  }
+
+  if (status === 404) {
+    return "エンドポイントが見つかりません (HTTP 404)";
+  }
+
+  return `送信エラー (HTTP ${status})`;
 }
 
 function parseRetryAfterMs(retryAfterHeader: string | null) {
@@ -162,119 +196,6 @@ function computeRetryDelayMs(attempt: number, retryAfterHeader: string | null) {
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
-  const details: string[] = [];
-const seenDetails = new Set<string>();
-
-  const appendDetail = (value: string) => {
-    const normalized = normalizeErrorText(value);
-    if (!normalized) return;
-    if (isLikelyNotFoundHtml(normalized)) {
-      details.push(
-        "NEXLINK API のページが見つかりませんでした。Base URL または direct_send エンドポイントをご確認ください。",
-      );
-      return;
-    }
-    if (seenDetails.has(normalized)) return;
-    seenDetails.add(normalized);
-    details.push(normalized);
-  };
-  const collectTextDetails = (value: unknown) => {
-    if (typeof value === "string") {
-      appendDetail(value);
-      return;
-    }
-    if (!value || typeof value !== "object") return;
-
-    const record = value as Record<string, unknown>;
-    for (const key of ["message", "error", "detail", "title"]) {
-      const text = record[key];
-      if (typeof text === "string") appendDetail(text);
-    }
-  };
-
-  if (typeof data === "string" && data.trim()) {
-    appendDetail(data);
-  }
-
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-
-     collectTextDetails(record);
-
-    if (typeof record.application_error_code === "string" && record.application_error_code.trim()) {
-      details.unshift(`application_error_code: ${record.application_error_code.trim()}`);
-    }
-
-    if (Array.isArray(record.errors)) {
-      for (const item of record.errors) {
-        if (typeof item === "string" && item.trim()) {
-           appendDetail(item);
-          continue;
-        }
-        if (item && typeof item === "object") {
-          const errorRecord = item as Record<string, unknown>;
-          collectTextDetails(errorRecord);
-        }
-      }
-    }
-
-    if (Array.isArray(record.details)) {
-      for (const item of record.details) {
-        if (!item || typeof item !== "object") continue;
-        const detailRecord = item as Record<string, unknown>;
-        const parameter =
-          typeof detailRecord.parameter === "string"
-            ? detailRecord.parameter.trim()
-            : "";
-        const message =
-          typeof detailRecord.message === "string"
-            ? detailRecord.message.trim()
-            : "";
-
-        if (parameter && message) appendDetail(`${parameter}: ${message}`);
-        else if (message) appendDetail(message);
-      }
-    }
-  }
-
-  if (details.length > 0) {
-    return details.join(" / ");
-  }
-
-  let normalizedFallback = normalizeErrorText(fallbackText);
-  if (normalizedFallback.startsWith("{") || normalizedFallback.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(normalizedFallback) as unknown;
-      collectTextDetails(parsed);
-      if (details.length > 0) {
-        return details.join(" / ");
-      }
-      normalizedFallback = "";
-    } catch {
-      // Ignore parse failure and keep using plain fallback text.
-    }
-  }
-
-  if (normalizedFallback) {
-    return normalizedFallback.slice(0, 500);
-  }
-
-  if (status === 401) {
-    return "認証エラー (HTTP 401) : Authorization ヘッダーを `token YOUR_API_TOKEN` 形式で設定してください。";
-  }
-
-  if (status === 404) {
-    return "エンドポイントが見つかりません (HTTP 404)。URL またはパスをご確認ください。";
-  }
-
-  if (status === 503) {
-    return "相手先サービスが一時的に利用できません (HTTP 503)。しばらくして再試行してください。";
-  }
-
-  return `送信エラー (HTTP ${status})`;
 }
 
 async function fetchJsonWithRetry(
@@ -342,54 +263,54 @@ async function fetchJsonWithRetry(
   };
 }
 
-function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
-  if (!data || typeof data !== "object") return null;
-  const record = data as Record<string, unknown>;
-  return (record[key] as T) ?? null;
-}
-
 function getResolvedDirectSendUrl() {
-  const endpointUrl = readEnv("NEXILINK_FAX_ENDPOINT", "NEXLINK_FAX_ENDPOINT");
+  const endpointUrl = readEnv("NEXLINK_FAX_ENDPOINT", "NEXILINK_FAX_ENDPOINT");
   if (endpointUrl) return endpointUrl;
 
   const baseUrl =
     readEnv("NEXLINK_API_BASE_URL", "NEXILINK_API_BASE_URL") || DEFAULT_BASE_URL;
-
   const apiPath =
     readEnv("NEXLINK_API_PATH", "NEXILINK_API_PATH") || DEFAULT_API_PATH;
 
   return new URL(apiPath, baseUrl).toString();
 }
 
+function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  return (record[key] as T) ?? null;
+}
+
 async function sendDirectFax(params: {
   apiUrl: string;
   apiToken: string;
-  authScheme: string;
   faxNumber: string;
   allowInternationalFax: boolean;
   quality: number;
 }) {
-  const requestBody = JSON.stringify({
+  const requestBody = {
     fax_number: params.faxNumber,
     allow_international_fax: params.allowInternationalFax,
     quality: params.quality,
-  });
-   return fetchJsonWithRetry(params.apiUrl, {
+  };
+
+  console.log("NEXLINK direct_send url =", params.apiUrl);
+  console.log("NEXLINK direct_send body =", requestBody);
+  console.log("NEXLINK token preview =", `[${params.apiToken}]`);
+
+  return fetchJsonWithRetry(params.apiUrl, {
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      ...buildAuthHeader(params.apiToken, normalizeAuthScheme(params.authScheme)),
+      ...buildAuthHeader(params.apiToken),
     },
-    body: requestBody,
+    body: JSON.stringify(requestBody),
   });
 }
 
 export async function POST(request: Request) {
   const apiUrl = getResolvedDirectSendUrl();
-   const authScheme = normalizeAuthScheme(
-    readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME") || "token",
-  );
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
@@ -400,16 +321,6 @@ export async function POST(request: Request) {
   if (!apiToken) {
     return NextResponse.json(
       { error: "NEXLINK_API_TOKEN が未設定です。" },
-      { status: 500 },
-    );
-  }
-const normalizedApiToken = normalizeAuthToken(apiToken);
-  if (!normalizedApiToken || isPlaceholderToken(normalizedApiToken)) {
-    return NextResponse.json(
-      {
-        error:
-          "NEXLINK_API_TOKEN がプレースホルダー値のままです。実際の API トークンを設定してください。",
-      },
       { status: 500 },
     );
   }
@@ -462,23 +373,36 @@ const normalizedApiToken = normalizeAuthToken(apiToken);
     for (const target of validFaxTargets) {
       const response = await sendDirectFax({
         apiUrl,
-        apiToken: normalizedApiToken,
-        authScheme,
+        apiToken,
         faxNumber: target.normalized,
         allowInternationalFax,
         quality,
       });
 
+      console.log("NEXLINK direct_send status =", response.status);
+      console.log("NEXLINK direct_send data =", response.data);
+      console.log("NEXLINK direct_send rawText =", response.rawText);
+
       if (!response.ok) {
         results.push({
           to: target.original,
           success: false,
-          error: extractErrorDetail(
+          error: `HTTP ${response.status} / ${extractErrorDetail(
             response.status,
             response.data,
             response.rawText,
-          ),
-          raw: response.data,
+          )}`,
+          raw: {
+            status: response.status,
+            data: response.data,
+            rawText: response.rawText,
+            endpoint: apiUrl,
+            requestBody: {
+              fax_number: target.normalized,
+              allow_international_fax: allowInternationalFax,
+              quality,
+            },
+          },
         });
         continue;
       }
