@@ -89,6 +89,17 @@ function buildBasicAuthValue(username: string, password: string) {
   return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
 }
 
+function buildBasicAuthCandidatesFromToken(token: string) {
+  const trimmed = normalizeAuthToken(token);
+  if (!trimmed) return [];
+
+  return [
+    `Basic ${Buffer.from(`${trimmed}:`).toString("base64")}`,
+    `Basic ${Buffer.from(`:${trimmed}`).toString("base64")}`,
+    `Basic ${Buffer.from(`${trimmed}:${trimmed}`).toString("base64")}`,
+  ];
+}
+
 function buildAuthHeaderCandidates(
   token: string,
   scheme: AuthScheme,
@@ -138,6 +149,10 @@ function buildAuthHeaderCandidates(
   if (basicAuthValue) {
     pushCandidate({ Authorization: basicAuthValue });
   }
+  for (const candidate of buildBasicAuthCandidatesFromToken(token)) {
+    pushCandidate({ Authorization: candidate });
+  }
+
 
   return candidates;
 }
@@ -504,15 +519,19 @@ export async function POST(request: Request) {
     "NEXLINK_API_KEY",
   );
   const senderId = readEnv("NEXILINK_SENDER_ID", "NEXLINK_SENDER_ID");
- const apiLoginId = readEnv(
+  const apiLoginId = readEnv(
     "NEXLINK_API_LOGIN_ID",
     "NEXILINK_API_LOGIN_ID",
+    "NEXLINK_LOGIN_ID",
+    "NEXILINK_LOGIN_ID",
     "NEXLINK_API_USER",
     "NEXILINK_API_USER",
   );
   const apiPassword = readEnv(
     "NEXLINK_API_PASSWORD",
     "NEXILINK_API_PASSWORD",
+    "NEXLINK_PASSWORD",
+    "NEXILINK_PASSWORD",
     "NEXLINK_API_PASS",
     "NEXILINK_API_PASS",
   );
@@ -626,10 +645,11 @@ export async function POST(request: Request) {
 
         let response: Response | null = null;
         let rawBody = "";
-         
+        const attemptedAuthPatterns: string[] = [];
         let data: unknown = null;
 
        for (let i = 0; i < authHeaderCandidates.length; i += 1) {
+          attemptedAuthPatterns.push(Object.keys(authHeaderCandidates[i]).join(","));
           let lastFetchError: unknown = null;
           for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
             try {
@@ -696,10 +716,15 @@ export async function POST(request: Request) {
         }
 
         if (!response.ok) {
+           const baseError = extractErrorDetail(response.status, data, rawBody);
+          const error =
+            response.status === 401
+              ? `${baseError} (試行ヘッダー: ${Array.from(new Set(attemptedAuthPatterns)).join(" -> ") || "なし"})`
+              : baseError;
           return {
             to: target.original,
             success: false,
-            error: extractErrorDetail(response.status, data, rawBody),
+            error,
             raw: data,
           };
         }
