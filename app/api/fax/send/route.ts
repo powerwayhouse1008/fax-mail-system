@@ -137,26 +137,43 @@ function sleep(ms: number) {
 
 function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
   const details: string[] = [];
+const seenDetails = new Set<string>();
+
+  const appendDetail = (value: string) => {
+    const normalized = normalizeErrorText(value);
+    if (!normalized) return;
+    if (isLikelyNotFoundHtml(normalized)) {
+      details.push(
+        "NEXLINK API のページが見つかりませんでした。Base URL または direct_send エンドポイントをご確認ください。",
+      );
+      return;
+    }
+    if (seenDetails.has(normalized)) return;
+    seenDetails.add(normalized);
+    details.push(normalized);
+  };
+  const collectTextDetails = (value: unknown) => {
+    if (typeof value === "string") {
+      appendDetail(value);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+
+    const record = value as Record<string, unknown>;
+    for (const key of ["message", "error", "detail", "title"]) {
+      const text = record[key];
+      if (typeof text === "string") appendDetail(text);
+    }
+  };
 
   if (typeof data === "string" && data.trim()) {
-    const normalized = normalizeErrorText(data);
-    if (normalized) {
-      if (isLikelyNotFoundHtml(normalized)) {
-        return "NEXLINK API のページが見つかりませんでした。Base URL または direct_send エンドポイントをご確認ください。";
-      }
-      details.push(normalized);
-    }
+    appendDetail(data);
   }
 
   if (data && typeof data === "object") {
     const record = data as Record<string, unknown>;
 
-    for (const key of ["message", "error", "detail", "title"]) {
-      const value = record[key];
-      if (typeof value === "string" && value.trim()) {
-        details.push(value.trim());
-      }
-    }
+     collectTextDetails(record);
 
     if (typeof record.application_error_code === "string" && record.application_error_code.trim()) {
       details.unshift(`application_error_code: ${record.application_error_code.trim()}`);
@@ -165,17 +182,12 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
     if (Array.isArray(record.errors)) {
       for (const item of record.errors) {
         if (typeof item === "string" && item.trim()) {
-          details.push(item.trim());
+           appendDetail(item);
           continue;
         }
         if (item && typeof item === "object") {
           const errorRecord = item as Record<string, unknown>;
-          if (typeof errorRecord.message === "string" && errorRecord.message.trim()) {
-            details.push(errorRecord.message.trim());
-          }
-          if (typeof errorRecord.detail === "string" && errorRecord.detail.trim()) {
-            details.push(errorRecord.detail.trim());
-          }
+          collectTextDetails(errorRecord);
         }
       }
     }
@@ -193,8 +205,8 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
             ? detailRecord.message.trim()
             : "";
 
-        if (parameter && message) details.push(`${parameter}: ${message}`);
-        else if (message) details.push(message);
+        if (parameter && message) appendDetail(`${parameter}: ${message}`);
+        else if (message) appendDetail(message);
       }
     }
   }
@@ -203,7 +215,20 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
     return details.join(" / ");
   }
 
-  const normalizedFallback = normalizeErrorText(fallbackText);
+  let normalizedFallback = normalizeErrorText(fallbackText);
+  if (normalizedFallback.startsWith("{") || normalizedFallback.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(normalizedFallback) as unknown;
+      collectTextDetails(parsed);
+      if (details.length > 0) {
+        return details.join(" / ");
+      }
+      normalizedFallback = "";
+    } catch {
+      // Ignore parse failure and keep using plain fallback text.
+    }
+  }
+
   if (normalizedFallback) {
     return normalizedFallback.slice(0, 500);
   }
