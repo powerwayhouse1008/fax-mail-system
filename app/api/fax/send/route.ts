@@ -108,7 +108,9 @@ function buildAuthHeaderCandidates(
   };
 
   if (scheme !== "token") {
-    pushCandidate(buildAuthHeaders(token, scheme));
+     if (trimmed) {
+      pushCandidate(buildAuthHeaders(token, scheme));
+    }
     if (basicAuthValue) {
       pushCandidate({ Authorization: basicAuthValue });
     }
@@ -117,19 +119,26 @@ function buildAuthHeaderCandidates(
 
   // NexiLink environments are inconsistent about auth header requirements.
   // Try the common variants before failing on HTTP 401.
-  pushCandidate({ Authorization: `token ${trimmed}` });
-  pushCandidate({ Authorization: `Token ${trimmed}` });
-  pushCandidate({ Authorization: `Bearer ${trimmed}` });
-  pushCandidate({ Authorization: `Token token=${trimmed}` });
-  pushCandidate({ Authorization: `Token token=\"${trimmed}\"` });
-  pushCandidate({ Authorization: `token=${trimmed}` });
-  pushCandidate({ Authorization: trimmed });
-  pushCandidate({ "X-API-KEY": trimmed });
-  pushCandidate({ "X-Auth-Token": trimmed });
-  pushCandidate({ token: trimmed });
-  pushCandidate({ "Api-Token": trimmed });
-  pushCandidate({ "api-token": trimmed });
-  pushCandidate({ "access-token": trimmed });
+  if (trimmed) {
+    pushCandidate({ Authorization: `token ${trimmed}` });
+    pushCandidate({ Authorization: `Token ${trimmed}` });
+    pushCandidate({ Authorization: `Bearer ${trimmed}` });
+    pushCandidate({ Authorization: `Token token=${trimmed}` });
+    pushCandidate({ Authorization: `Token token=\"${trimmed}\"` });
+    pushCandidate({ Authorization: `token=${trimmed}` });
+    pushCandidate({ Authorization: trimmed });
+    pushCandidate({ "X-API-KEY": trimmed });
+    pushCandidate({ "X-Auth-Token": trimmed });
+    pushCandidate({ token: trimmed });
+    pushCandidate({ "Api-Token": trimmed });
+    pushCandidate({ "api-token": trimmed });
+    pushCandidate({ "access-token": trimmed });
+  }
+
+  if (basicAuthValue) {
+    pushCandidate({ Authorization: basicAuthValue });
+  }
+
   return candidates;
 }
 function normalizeAuthScheme(value: string): AuthScheme {
@@ -521,11 +530,13 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!apiToken) {
+ const basicAuthValue = buildBasicAuthValue(apiLoginId, apiPassword);
+
+  if (!apiToken && !basicAuthValue) {
     return NextResponse.json(
       {
         error:
-          "NEXLINK_API_TOKEN または NEXILINK_API_KEY が未設定です。",
+         "NEXLINK_API_TOKEN (または NEXILINK_API_KEY) か NEXLINK_API_LOGIN_ID / NEXLINK_API_PASSWORD のいずれかを設定してください。",
       },
       { status: 500 },
     );
@@ -596,7 +607,6 @@ export async function POST(request: Request) {
 
   try {
     const attachments = await resolveAttachments(attachmentsPayload);
-    const basicAuthValue = buildBasicAuthValue(apiLoginId, apiPassword);
     const authHeaderCandidates = buildAuthHeaderCandidates(
       apiToken,
       authScheme,
