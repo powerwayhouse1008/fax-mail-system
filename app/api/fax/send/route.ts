@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
+const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 3;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
 
 type RequestPayload = {
   faxNumbers?: unknown;
-  deliveryName?: unknown;
   allowInternationalFax?: unknown;
   quality?: unknown;
 };
@@ -16,8 +16,7 @@ type SendResult =
   | {
       to: string;
       success: true;
-      facsimileId: number | string | null;
-      transmissionId: number | string | null;
+      id: number | string | null;
       raw?: unknown;
     }
   | {
@@ -143,7 +142,7 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
     const normalized = normalizeErrorText(data);
     if (normalized) {
       if (isLikelyNotFoundHtml(normalized)) {
-        return "NEXLINK API のページが見つかりませんでした。Base URL またはエンドポイントをご確認ください。";
+        return "NEXLINK API のページが見つかりませんでした。Base URL または direct_send エンドポイントをご確認ください。";
       }
       details.push(normalized);
     }
@@ -159,6 +158,10 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
       }
     }
 
+    if (typeof record.application_error_code === "string" && record.application_error_code.trim()) {
+      details.unshift(`application_error_code: ${record.application_error_code.trim()}`);
+    }
+
     if (Array.isArray(record.errors)) {
       for (const item of record.errors) {
         if (typeof item === "string" && item.trim()) {
@@ -167,16 +170,10 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
         }
         if (item && typeof item === "object") {
           const errorRecord = item as Record<string, unknown>;
-          if (
-            typeof errorRecord.message === "string" &&
-            errorRecord.message.trim()
-          ) {
+          if (typeof errorRecord.message === "string" && errorRecord.message.trim()) {
             details.push(errorRecord.message.trim());
           }
-          if (
-            typeof errorRecord.detail === "string" &&
-            errorRecord.detail.trim()
-          ) {
+          if (typeof errorRecord.detail === "string" && errorRecord.detail.trim()) {
             details.push(errorRecord.detail.trim());
           }
         }
@@ -297,46 +294,27 @@ function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
   return (record[key] as T) ?? null;
 }
 
-async function createFacsimile(params: {
-  baseUrl: string;
-  apiToken: string;
-  contactListId: number;
-  deliveryName: string;
-}) {
-  const url = new URL("/api/v1/facsimiles", params.baseUrl).toString();
+function getResolvedDirectSendUrl() {
+  const endpointUrl = readEnv("NEXILINK_FAX_ENDPOINT", "NEXLINK_FAX_ENDPOINT");
+  if (endpointUrl) return endpointUrl;
 
-  return fetchJsonWithRetry(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...buildAuthHeader(params.apiToken),
-    },
-    body: JSON.stringify({
-      delivery_name: params.deliveryName,
-      contact_list_id: params.contactListId,
-       // Some Nexlink environments validate `contact_list` (not only `contact_list_id`).
-      // Send both keys to avoid validation errors like:
-      // "contact_list: Contact listを入力してください。"
-      contact_list: params.contactListId,
-    }),
-  });
+  const baseUrl =
+    readEnv("NEXLINK_API_BASE_URL", "NEXILINK_API_BASE_URL") || DEFAULT_BASE_URL;
+
+  const apiPath =
+    readEnv("NEXLINK_API_PATH", "NEXILINK_API_PATH") || DEFAULT_API_PATH;
+
+  return new URL(apiPath, baseUrl).toString();
 }
 
-async function createTestTransmission(params: {
-  baseUrl: string;
+async function sendDirectFax(params: {
+  apiUrl: string;
   apiToken: string;
-  facsimileId: number | string;
   faxNumber: string;
   allowInternationalFax: boolean;
   quality: number;
 }) {
-  const url = new URL(
-    `/api/v1/facsimiles/${params.facsimileId}/test_transmissions`,
-    params.baseUrl,
-  ).toString();
-
-  return fetchJsonWithRetry(url, {
+  return fetchJsonWithRetry(params.apiUrl, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -352,10 +330,7 @@ async function createTestTransmission(params: {
 }
 
 export async function POST(request: Request) {
-  const baseUrl = readEnv(
-    "NEXLINK_API_BASE_URL",
-    "NEXILINK_API_BASE_URL",
-  ) || DEFAULT_BASE_URL;
+  const apiUrl = getResolvedDirectSendUrl();
 
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
@@ -364,34 +339,9 @@ export async function POST(request: Request) {
     "NEXILINK_API_KEY",
   );
 
-  const contactListIdRaw = readEnv(
-    "NEXLINK_CONTACT_LIST_ID",
-    "NEXILINK_CONTACT_LIST_ID",
-  );
-
   if (!apiToken) {
     return NextResponse.json(
       { error: "NEXLINK_API_TOKEN が未設定です。" },
-      { status: 500 },
-    );
-  }
-
-  if (!contactListIdRaw) {
-    return NextResponse.json(
-      {
-        error:
-          "NEXLINK_CONTACT_LIST_ID が未設定です。03-01 FAX新規作成に必要です。",
-      },
-      { status: 500 },
-    );
-  }
-
-  const contactListId = Number(contactListIdRaw);
-  if (!Number.isInteger(contactListId) || contactListId <= 0) {
-    return NextResponse.json(
-      {
-        error: "NEXLINK_CONTACT_LIST_ID が不正です。数値で設定してください。",
-      },
       { status: 500 },
     );
   }
@@ -426,11 +376,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const deliveryName =
-    typeof payload.deliveryName === "string" && payload.deliveryName.trim()
-      ? payload.deliveryName.trim()
-      : `テストFAX_${new Date().toISOString()}`;
-
   const allowInternationalFax =
     typeof payload.allowInternationalFax === "boolean"
       ? payload.allowInternationalFax
@@ -444,88 +389,41 @@ export async function POST(request: Request) {
       : 0;
 
   try {
-    const facsimileResponse = await createFacsimile({
-      baseUrl,
-      apiToken,
-      contactListId,
-      deliveryName,
-    });
-
-    if (!facsimileResponse.ok) {
-      const error = extractErrorDetail(
-        facsimileResponse.status,
-        facsimileResponse.data,
-        facsimileResponse.rawText,
-      );
-
-      return NextResponse.json(
-        {
-          error: `FAX新規作成に失敗しました: ${error}`,
-          endpoint: `${baseUrl}/api/v1/facsimiles`,
-          raw: facsimileResponse.data,
-        },
-        { status: 400 },
-      );
-    }
-
-    const facsimileId =
-      getObjectValue<number | string>(facsimileResponse.data, "id") ??
-      getObjectValue<number | string>(facsimileResponse.data, "facsimile_id");
-
-    if (!facsimileId) {
-      return NextResponse.json(
-        {
-          error:
-            "FAX新規作成は成功しましたが、facsimile_id を取得できませんでした。",
-          raw: facsimileResponse.data,
-        },
-        { status: 500 },
-      );
-    }
-
     const results: SendResult[] = [];
 
     for (const target of validFaxTargets) {
-      const transmissionResponse = await createTestTransmission({
-        baseUrl,
+      const response = await sendDirectFax({
+        apiUrl,
         apiToken,
-        facsimileId,
         faxNumber: target.normalized,
         allowInternationalFax,
         quality,
       });
 
-      if (!transmissionResponse.ok) {
+      if (!response.ok) {
         results.push({
           to: target.original,
           success: false,
           error: extractErrorDetail(
-            transmissionResponse.status,
-            transmissionResponse.data,
-            transmissionResponse.rawText,
+            response.status,
+            response.data,
+            response.rawText,
           ),
-          raw: transmissionResponse.data,
+          raw: response.data,
         });
         continue;
       }
 
-      const transmissionId =
-        getObjectValue<number | string>(transmissionResponse.data, "id") ??
-        getObjectValue<number | string>(
-          transmissionResponse.data,
-          "test_facsimile_id",
-        ) ??
-        getObjectValue<number | string>(
-          transmissionResponse.data,
-          "test_transmission_id",
-        );
+      const id =
+        getObjectValue<number | string>(response.data, "id") ??
+        getObjectValue<number | string>(response.data, "test_facsimile_id") ??
+        getObjectValue<number | string>(response.data, "facsimile_id");
 
       results.push({
         to: target.original,
         success: true,
-        facsimileId,
-        transmissionId,
-        raw: transmissionResponse.data,
+        id,
+        raw: response.data,
       });
     }
 
@@ -536,9 +434,7 @@ export async function POST(request: Request) {
       total: validFaxTargets.length,
       successCount,
       failedCount: failed.length,
-      facsimileId,
-      endpointCreate: `${baseUrl}/api/v1/facsimiles`,
-      endpointTestTransmission: `${baseUrl}/api/v1/facsimiles/{facsimile_id}/test_transmissions`,
+      endpoint: apiUrl,
       results,
       failed,
     });
