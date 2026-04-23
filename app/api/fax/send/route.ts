@@ -334,6 +334,9 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
   if (typeof data === "string" && data.trim()) {
     const normalized = normalizeErrorText(data);
     if (normalized) {
+    if (isLikelyNotFoundHtml(normalized)) {
+        return "NexiLink API のページが見つかりませんでした。API URL または direct_send エンドポイント設定をご確認ください。";
+      }
       details.push(normalized);
     }
   }
