@@ -205,6 +205,47 @@ function normalizeErrorText(value: string) {
 
   return trimmed;
 }
+function isLikelyNotFoundHtml(body: string) {
+  const normalized = normalizeErrorText(body).toLowerCase();
+  if (!normalized) return false;
+
+  return (
+    normalized.includes("not found") ||
+    normalized.includes("404") ||
+    normalized.includes("お探しのページが見つかりませんでした") ||
+    normalized.includes("ページが見つかりませんでした")
+  );
+}
+
+function getSuccessfulResponseId(data: unknown) {
+  if (!data || typeof data !== "object") return null;
+  if (!("id" in data)) return null;
+  return (data as Record<string, unknown>).id;
+}
+
+function extractSuccessAnomaly(data: unknown, rawBody: string) {
+  if (typeof data === "string") {
+    if (isLikelyNotFoundHtml(data)) {
+      return "NexiLink API からページ未検出の応答が返されました。API URL またはエンドポイント設定をご確認ください。";
+    }
+    return "";
+  }
+
+  if (rawBody && isLikelyNotFoundHtml(rawBody)) {
+    return "NexiLink API からページ未検出の応答が返されました。API URL またはエンドポイント設定をご確認ください。";
+  }
+
+  const responseId = getSuccessfulResponseId(data);
+  if (responseId !== null && responseId !== undefined && `${responseId}`.trim()) {
+    return "";
+  }
+
+  if (!data) {
+    return "NexiLink API の成功レスポンスが空でした。API URL またはエンドポイント設定をご確認ください。";
+  }
+
+  return "";
+}
 function formatFetchErrorDetail(error: unknown) {
   if (!(error instanceof Error)) {
     return "相手先サービスに接続できませんでした。";
@@ -650,10 +691,17 @@ export async function POST(request: Request) {
           };
         }
 
-        const responseId =
-          data && typeof data === "object" && "id" in data
-            ? (data as Record<string, unknown>).id
-            : null;
+         const anomaly = extractSuccessAnomaly(data, rawBody);
+        if (anomaly) {
+          return {
+            to: target.original,
+            success: false,
+            error: anomaly,
+            raw: data ?? rawBody,
+          };
+        }
+
+        const responseId = getSuccessfulResponseId(data);
 
         return {
           to: target.original,
