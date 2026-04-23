@@ -67,18 +67,19 @@ function normalizeAuthToken(token: string) {
   return token
     .trim()
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/`/g, "")
     .replace(/^['"]|['"]$/g, "")
     .replace(/^authorization\s*:\s*/i, "")
-    .replace(/^token\s+/i, "")
+    .replace(/^token\s*[:\s]\s*/i, "")
     .replace(/^bearer\s+/i, "")
     .trim();
 }
 
-function buildAuthHeader(token: string) {
+function buildAuthHeader(token: string, scheme = "token") {
   const trimmed = normalizeAuthToken(token);
   if (!trimmed) return {};
   return {
-    Authorization: `token ${trimmed}`,
+    Authorization: `${scheme} ${trimmed}`,
   };
 }
 
@@ -335,28 +336,52 @@ function getResolvedDirectSendUrl() {
 async function sendDirectFax(params: {
   apiUrl: string;
   apiToken: string;
+  authScheme: string;
   faxNumber: string;
   allowInternationalFax: boolean;
   quality: number;
 }) {
-  return fetchJsonWithRetry(params.apiUrl, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...buildAuthHeader(params.apiToken),
-    },
-    body: JSON.stringify({
-      fax_number: params.faxNumber,
-      allow_international_fax: params.allowInternationalFax,
-      quality: params.quality,
-    }),
+  const requestBody = JSON.stringify({
+    fax_number: params.faxNumber,
+    allow_international_fax: params.allowInternationalFax,
+    quality: params.quality,
   });
+   const schemesToTry = Array.from(
+    new Set([params.authScheme, "token", "Bearer", "Token"]),
+  ).filter(Boolean);
+
+  let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
+  for (const scheme of schemesToTry) {
+    const response = await fetchJsonWithRetry(params.apiUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...buildAuthHeader(params.apiToken, scheme),
+      },
+      body: requestBody,
+    });
+
+    if (response.ok || response.status !== 401) {
+      return response;
+    }
+
+    lastResponse = response;
+  }
+
+  return (
+    lastResponse ?? {
+      ok: false,
+      status: 500,
+      data: null,
+      rawText: "",
+    }
+  );
 }
 
 export async function POST(request: Request) {
   const apiUrl = getResolvedDirectSendUrl();
-
+  const authScheme = readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME") || "token";
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
@@ -420,6 +445,7 @@ export async function POST(request: Request) {
       const response = await sendDirectFax({
         apiUrl,
         apiToken,
+        authScheme,
         faxNumber: target.normalized,
         allowInternationalFax,
         quality,
