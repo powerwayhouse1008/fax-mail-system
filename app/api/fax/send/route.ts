@@ -85,7 +85,24 @@ function isPlaceholderToken(token: string) {
     upper.includes("API_TOKEN_HERE") ||
     upper.includes("REPLACE_ME")
   );
+ }
+
+function normalizeAuthScheme(value: string) {
+  const normalized = value
+    .trim()
+    .replace(/^authorization\s*:\s*/i, "")
+    .replace(/^['"]|['"]$/g, "");
+
+  if (!normalized) return "token";
+
+  const firstChunk = normalized.split(/\s+/)[0]?.toLowerCase() || "token";
+  if (firstChunk === "token" || firstChunk === "bearer") {
+    return firstChunk;
   }
+
+  return "token";
+}
+
 function buildAuthHeader(token: string, scheme = "token") {
   const trimmed = normalizeAuthToken(token);
   if (!trimmed) return {};
@@ -357,42 +374,22 @@ async function sendDirectFax(params: {
     allow_international_fax: params.allowInternationalFax,
     quality: params.quality,
   });
-   const schemesToTry = Array.from(
-    new Set([params.authScheme, "token", "Bearer", "Token"]),
-  ).filter(Boolean);
-
-  let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
-  for (const scheme of schemesToTry) {
-    const response = await fetchJsonWithRetry(params.apiUrl, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...buildAuthHeader(params.apiToken, scheme),
-      },
-      body: requestBody,
-    });
-
-    if (response.ok || response.status !== 401) {
-      return response;
-    }
-
-    lastResponse = response;
-  }
-
-  return (
-    lastResponse ?? {
-      ok: false,
-      status: 500,
-      data: null,
-      rawText: "",
-    }
-  );
+   return fetchJsonWithRetry(params.apiUrl, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...buildAuthHeader(params.apiToken, normalizeAuthScheme(params.authScheme)),
+    },
+    body: requestBody,
+  });
 }
 
 export async function POST(request: Request) {
   const apiUrl = getResolvedDirectSendUrl();
-  const authScheme = readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME") || "token";
+   const authScheme = normalizeAuthScheme(
+    readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME") || "token",
+  );
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
