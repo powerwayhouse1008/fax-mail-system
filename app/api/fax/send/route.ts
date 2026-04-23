@@ -73,7 +73,6 @@ function normalizeAuthToken(token: string) {
     .replace(/^token\s*[:\s]\s*/i, "")
     .replace(/^bearer\s+/i, "")
     .trim();
-}
 
   return normalized.replace(/\s+/g, "");
 }
@@ -86,6 +85,7 @@ function isPlaceholderToken(token: string) {
     upper.includes("API_TOKEN_HERE") ||
     upper.includes("REPLACE_ME")
   );
+  }
 function buildAuthHeader(token: string, scheme = "token") {
   const trimmed = normalizeAuthToken(token);
   if (!trimmed) return {};
@@ -466,7 +466,6 @@ const normalizedApiToken = normalizeAuthToken(apiToken);
       const response = await sendDirectFax({
         apiUrl,
         apiToken: normalizedApiToken,
-        authScheme,
         authScheme,
         faxNumber: target.normalized,
         allowInternationalFax,
