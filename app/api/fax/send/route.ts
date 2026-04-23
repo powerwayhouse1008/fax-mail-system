@@ -64,7 +64,7 @@ function normalizeFaxNumber(value: string) {
 }
 
 function normalizeAuthToken(token: string) {
-  return token
+  const normalized = token
     .trim()
     .replace(/[\u200B-\u200D\uFEFF]/g, "")
     .replace(/`/g, "")
@@ -75,6 +75,17 @@ function normalizeAuthToken(token: string) {
     .trim();
 }
 
+  return normalized.replace(/\s+/g, "");
+}
+
+function isPlaceholderToken(token: string) {
+  const upper = token.toUpperCase();
+  return (
+    upper === "YOUR_API_TOKEN" ||
+    upper.includes("YOUR_API_TOKEN") ||
+    upper.includes("API_TOKEN_HERE") ||
+    upper.includes("REPLACE_ME")
+  );
 function buildAuthHeader(token: string, scheme = "token") {
   const trimmed = normalizeAuthToken(token);
   if (!trimmed) return {};
@@ -395,6 +406,16 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+const normalizedApiToken = normalizeAuthToken(apiToken);
+  if (!normalizedApiToken || isPlaceholderToken(normalizedApiToken)) {
+    return NextResponse.json(
+      {
+        error:
+          "NEXLINK_API_TOKEN がプレースホルダー値のままです。実際の API トークンを設定してください。",
+      },
+      { status: 500 },
+    );
+  }
 
   let payload: RequestPayload;
   try {
@@ -444,7 +465,8 @@ export async function POST(request: Request) {
     for (const target of validFaxTargets) {
       const response = await sendDirectFax({
         apiUrl,
-        apiToken,
+        apiToken: normalizedApiToken,
+        authScheme,
         authScheme,
         faxNumber: target.normalized,
         allowInternationalFax,
