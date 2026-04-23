@@ -134,6 +134,8 @@ function buildAuthHeaderCandidates(
     pushCandidate({ Authorization: `token ${trimmed}` });
     pushCandidate({ Authorization: `Token ${trimmed}` });
     pushCandidate({ Authorization: `Bearer ${trimmed}` });
+    pushCandidate({ Authorization: `token token=${trimmed}` });
+    pushCandidate({ Authorization: `token token=\"${trimmed}\"` });
     pushCandidate({ Authorization: `Token token=${trimmed}` });
     pushCandidate({ Authorization: `Token token=\"${trimmed}\"` });
     pushCandidate({ Authorization: `Api-Token ${trimmed}` });
