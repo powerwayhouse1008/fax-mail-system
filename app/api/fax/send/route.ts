@@ -130,17 +130,24 @@ function buildAuthHeaderCandidates(
 
   // NexiLink environments are inconsistent about auth header requirements.
   // Try the common variants before failing on HTTP 401.
-  if (trimmed) {
+ if (trimmed) {
     pushCandidate({ Authorization: `token ${trimmed}` });
     pushCandidate({ Authorization: `Token ${trimmed}` });
     pushCandidate({ Authorization: `Bearer ${trimmed}` });
     pushCandidate({ Authorization: `Token token=${trimmed}` });
     pushCandidate({ Authorization: `Token token=\"${trimmed}\"` });
+    pushCandidate({ Authorization: `Api-Token ${trimmed}` });
+    pushCandidate({ Authorization: `X-API-KEY ${trimmed}` });
     pushCandidate({ Authorization: `token=${trimmed}` });
     pushCandidate({ Authorization: trimmed });
     pushCandidate({ "X-API-KEY": trimmed });
+    pushCandidate({ "X-Api-Key": trimmed });
     pushCandidate({ "X-Auth-Token": trimmed });
+    pushCandidate({ "X-Api-Token": trimmed });
+    pushCandidate({ "x-api-token": trimmed });
     pushCandidate({ token: trimmed });
+    pushCandidate({ apikey: trimmed });
+    pushCandidate({ api_key: trimmed });
     pushCandidate({ "Api-Token": trimmed });
     pushCandidate({ "api-token": trimmed });
     pushCandidate({ "access-token": trimmed });
@@ -155,6 +162,22 @@ function buildAuthHeaderCandidates(
 
 
   return candidates;
+}
+function getAuthAttemptLabel(headers: Record<string, string>) {
+  const [name, value] = Object.entries(headers)[0] ?? ["", ""];
+  if (!name) return "なし";
+
+  if (name.toLowerCase() !== "authorization") {
+    return name;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized.startsWith("token token=")) return "Authorization(token token=...)";
+  if (normalized.startsWith("token ")) return "Authorization(token ...)";
+  if (normalized.startsWith("bearer ")) return "Authorization(Bearer ...)";
+  if (normalized.startsWith("basic ")) return "Authorization(Basic ...)";
+  if (normalized.startsWith("token=")) return "Authorization(token=...)";
+  return "Authorization(raw)";
 }
 function normalizeAuthScheme(value: string): AuthScheme {
   const normalized = value.trim().replace(/^['"]|['"]$/g, "").toLowerCase();
@@ -649,7 +672,7 @@ export async function POST(request: Request) {
         let data: unknown = null;
 
        for (let i = 0; i < authHeaderCandidates.length; i += 1) {
-          attemptedAuthPatterns.push(Object.keys(authHeaderCandidates[i]).join(","));
+          attemptedAuthPatterns.push(getAuthAttemptLabel(authHeaderCandidates[i]));
           let lastFetchError: unknown = null;
           for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
             try {
