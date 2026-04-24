@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
-const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
+const DEFAULT_API_PATH = "/api/v1/contact_lists";
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 3;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
@@ -10,6 +10,9 @@ type RequestPayload = {
   faxNumbers?: unknown;
   allowInternationalFax?: unknown;
   quality?: unknown;
+  uploadedCardUrl?: unknown;
+  uploadedCardName?: unknown;
+  uploadedCardType?: unknown;
 };
 
 type SendResult =
@@ -289,13 +292,46 @@ async function sendDirectFax(params: {
   faxNumber: string;
   allowInternationalFax: boolean;
   quality: number;
+  uploadedCardUrl?: string | null;
+  uploadedCardName?: string | null;
+  uploadedCardType?: string | null;
 }) {
   const requestBody = {
     fax_number: params.faxNumber,
     allow_international_fax: params.allowInternationalFax,
     quality: params.quality,
+    uploaded_card_url: params.uploadedCardUrl || null,
   };
+  const formData = new FormData();
+  formData.append("fax_number", params.faxNumber);
+  formData.append("allow_international_fax", String(params.allowInternationalFax));
+  formData.append("quality", String(params.quality));
 
+  if (params.uploadedCardUrl) {
+    const fileResponse = await fetch(params.uploadedCardUrl, { cache: "no-store" });
+    if (!fileResponse.ok) {
+      throw new Error(
+        `名刺ファイルの取得に失敗しました (HTTP ${fileResponse.status})`,
+      );
+    }
+
+    const fileBlob = await fileResponse.blob();
+    const contentType =
+      params.uploadedCardType?.trim() ||
+      fileBlob.type ||
+      fileResponse.headers.get("content-type") ||
+      "application/octet-stream";
+    const fallbackExtension = contentType.startsWith("image/")
+      ? contentType.replace("image/", "")
+      : "bin";
+    const filename =
+      params.uploadedCardName?.trim() ||
+      `uploaded-card.${fallbackExtension}`;
+
+    const file = new File([fileBlob], filename, { type: contentType });
+    formData.append("image", file, filename);
+  }
+  
   console.log("NEXLINK direct_send url =", params.apiUrl);
   console.log("NEXLINK direct_send body =", requestBody);
   const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
@@ -305,10 +341,9 @@ async function sendDirectFax(params: {
     method: "POST",
     headers: {
       Accept: "application/json",
-      "Content-Type": "application/json",
       ...buildAuthHeader(params.apiToken),
     },
-    body: JSON.stringify(requestBody),
+    body: formData,
   });
 }
 function parseRequestMethodOverride(payload: RequestPayload) {
@@ -380,7 +415,18 @@ export async function POST(request: Request) {
     payload.quality >= 0
       ? payload.quality
       : 0;
-
+  const uploadedCardUrl =
+    typeof payload.uploadedCardUrl === "string" && payload.uploadedCardUrl.trim()
+      ? payload.uploadedCardUrl.trim()
+      : null;
+  const uploadedCardName =
+    typeof payload.uploadedCardName === "string" && payload.uploadedCardName.trim()
+      ? payload.uploadedCardName.trim()
+      : null;
+  const uploadedCardType =
+    typeof payload.uploadedCardType === "string" && payload.uploadedCardType.trim()
+      ? payload.uploadedCardType.trim()
+      : null;
   try {
     const results: SendResult[] = [];
 
@@ -391,6 +437,9 @@ export async function POST(request: Request) {
         faxNumber: target.normalized,
         allowInternationalFax,
         quality,
+        uploadedCardUrl,
+        uploadedCardName,
+        uploadedCardType,
       });
 
       console.log("NEXLINK direct_send status =", response.status);
