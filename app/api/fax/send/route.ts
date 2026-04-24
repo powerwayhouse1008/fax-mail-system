@@ -469,8 +469,15 @@ async function sendDirectFax(params: {
   });
   const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
   console.log("NEXLINK token preview =", maskedToken);
-
+  const authTokenBodyCandidates = [
+    {},
+    { token: params.apiToken },
+    { api_token: params.apiToken },
+    { base: { token: params.apiToken } },
+    { base: { api_token: params.apiToken } },
+  ] as const;
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
+  
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
     name: "json_object" | "json_string" | "multipart_recipient_file";
@@ -489,6 +496,7 @@ async function sendDirectFax(params: {
         },
         body: JSON.stringify({
           ...baseRequestBody,
+          ...authTokenBodyCandidates[0],
           mapping_columns: normalizedMappingColumns,
         }),
       }),
@@ -502,6 +510,7 @@ async function sendDirectFax(params: {
           Accept: "application/json",
           "Content-Type": "application/json",
           ...authHeader,
+          ...authTokenBodyCandidates[0],
         },
         body: JSON.stringify({
           ...baseRequestBody,
@@ -530,6 +539,7 @@ async function sendDirectFax(params: {
           "mapping_columns",
           JSON.stringify(normalizedMappingColumns),
         );
+        formData.append("token", params.apiToken);
         if (params.uploadedCardUrl) {
           formData.append("uploaded_card_url", params.uploadedCardUrl);
         }
@@ -549,43 +559,55 @@ async function sendDirectFax(params: {
     const authHeader = authHeaderCandidates[index];
     const authHeaderKeys = Object.keys(authHeader).join(",");
     for (const variant of requestVariants) {
-      const response = await fetchJsonWithRetry(
-        params.apiUrl,
-        variant.buildInit(authHeader),
-      );
+       for (const authTokenBodyCandidate of authTokenBodyCandidates) {
+        const response = await fetchJsonWithRetry(
+          params.apiUrl,
+          variant.name === "multipart_recipient_file"
+            ? variant.buildInit(authHeader)
+            : {
+                ...variant.buildInit(authHeader),
+                body: JSON.stringify({
+                  ...baseRequestBody,
+                  ...authTokenBodyCandidate,
+                  ...(variant.mappingMode === "object"
+                    ? { mapping_columns: normalizedMappingColumns }
+                    : { mapping_columns: JSON.stringify(normalizedMappingColumns) }),
+                }),
+              },
+        );
+       lastResponse = response;
+        const mappingColumnErrorText = `${JSON.stringify(response.data ?? "")} ${response.rawText}`;
+        const isMappingColumnsValidationError =
+          response.status === 422 &&
+          /0130001|mapping_columns/i.test(mappingColumnErrorText);
+        const isRecipientListFileValidationError =
+          response.status === 422 &&
+          /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
+            mappingColumnErrorText,
+          );
+        if (isMappingColumnsValidationError) {
+          console.log(
+            `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
+          );
+          continue;
+        }
+        if (
+          isRecipientListFileValidationError &&
+          variant.name !== "multipart_recipient_file"
+        ) {
+          console.log(
+            `NEXLINK recipient-list retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart file payload`,
+          );
+          continue;
+        }
+        if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
+          return response;
+        }
 
-      lastResponse = response;
-      const mappingColumnErrorText = `${JSON.stringify(response.data ?? "")} ${response.rawText}`;
-      const isMappingColumnsValidationError =
-        response.status === 422 &&
-        /0130001|mapping_columns/i.test(mappingColumnErrorText);
-      const isRecipientListFileValidationError =
-        response.status === 422 &&
-        /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
-          mappingColumnErrorText,
-        );
-       if (isMappingColumnsValidationError) {
         console.log(
-          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
+         `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}, headers=${authHeaderKeys}, authBody=${JSON.stringify(authTokenBodyCandidate)}`,
         );
-        continue;
       }
-      if (
-        isRecipientListFileValidationError &&
-        variant.name !== "multipart_recipient_file"
-      ) {
-        console.log(
-          `NEXLINK recipient-list retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart file payload`,
-        );
-        continue;
-      }
-       if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
-        return response;
-      }
-
-      console.log(
-        `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}, headers=${authHeaderKeys}`,
-      );
     }
   }
 
