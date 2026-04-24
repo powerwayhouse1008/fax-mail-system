@@ -158,6 +158,8 @@ function buildAuthHeaderCandidates(token: string) {
   }
 
   addCandidate(buildAuthHeader(token));
+  
+ const authorizationCandidates: AuthHeader[] = [];
 
   for (const value of [
     `token ${trimmed}`,
@@ -169,12 +171,31 @@ function buildAuthHeaderCandidates(token: string) {
     `token token=${trimmed}`,
     trimmed,
   ]) {
-    addCandidate(createAuthorizationHeader(value));
+   const header = createAuthorizationHeader(value);
+    authorizationCandidates.push(header);
+    addCandidate(header);
   }
 
-   addCandidate({ "X-Auth-Token": trimmed });
-  addCandidate({ "X-API-Token": trimmed });
-  addCandidate({ "X-API-Key": trimmed });
+  const tokenHeaderCandidates: AuthHeader[] = [
+    { "X-Auth-Token": trimmed },
+    { "X-API-Token": trimmed },
+    { "X-API-Key": trimmed },
+    { "Api-Token": trimmed },
+    { "X-Access-Token": trimmed },
+  ];
+
+  for (const tokenHeader of tokenHeaderCandidates) {
+    addCandidate(tokenHeader);
+  }
+
+  for (const authorizationHeader of authorizationCandidates) {
+    for (const tokenHeader of tokenHeaderCandidates) {
+      addCandidate({
+        ...authorizationHeader,
+        ...tokenHeader,
+      });
+    }
+  }
 
   return Array.from(candidates.values());
 }
@@ -475,6 +496,7 @@ async function sendDirectFax(params: {
   ];
   for (let index = 0; index < authHeaderCandidates.length; index += 1) {
     const authHeader = authHeaderCandidates[index];
+    const authHeaderKeys = Object.keys(authHeader).join(",");
     for (const variant of requestVariants) {
       const response = await fetchJsonWithRetry(
         params.apiUrl,
@@ -487,7 +509,7 @@ async function sendDirectFax(params: {
       }
 
       console.log(
-        `NEXLINK auth/content retry: HTTP 401 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
+        `NEXLINK auth/content retry: HTTP 401 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}, headers=${authHeaderKeys}`,
       );
     }
   }
