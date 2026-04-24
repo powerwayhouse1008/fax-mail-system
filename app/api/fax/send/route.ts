@@ -14,6 +14,7 @@ type RequestPayload = {
   uploadedCardName?: unknown;
   uploadedCardType?: unknown;
   mappingColumns?: unknown;
+  mapping_columns?: unknown;
 };
 
 type SendResult =
@@ -503,6 +504,32 @@ function parseRequestMethodOverride(payload: RequestPayload) {
   return method.trim().toUpperCase() || "POST";
 }
 
+function resolveMappingColumns(payload: RequestPayload) {
+  const raw =
+    payload.mappingColumns ??
+    payload.mapping_columns;
+
+  if (!raw) return {};
+
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+
+  return {};
+}
+
 export async function POST(request: Request) {
   const apiUrl = getResolvedDirectSendUrl();
   const apiToken = readEnv(
@@ -578,10 +605,7 @@ export async function POST(request: Request) {
     typeof payload.uploadedCardType === "string" && payload.uploadedCardType.trim()
       ? payload.uploadedCardType.trim()
       : null;
-  const mappingColumns =
-    payload.mappingColumns && typeof payload.mappingColumns === "object" && !Array.isArray(payload.mappingColumns)
-      ? (payload.mappingColumns as Record<string, unknown>)
-      : {};
+  const mappingColumns = resolveMappingColumns(payload);
   try {
     const results: SendResult[] = [];
 
