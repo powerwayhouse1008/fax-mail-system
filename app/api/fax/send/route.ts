@@ -616,6 +616,23 @@ function resolveMappingColumns(payload: RequestPayload) {
   return {};
 }
 
+function ensureRecipientMappingColumns(
+  mappingColumns: Record<string, unknown>,
+) {
+  const entries = Object.entries(mappingColumns);
+  const hasFaxOrEmailColumn = entries.some(([key, value]) => {
+    if (typeof value !== "string" || !value.trim()) return false;
+    const normalizedKey = key.trim().toLowerCase();
+    return normalizedKey === "fax" || normalizedKey === "email";
+  });
+
+  if (hasFaxOrEmailColumn) return mappingColumns;
+
+  return {
+    ...mappingColumns,
+    fax: "fax_number",
+  };
+}
 
 
 export async function POST(request: Request) {
@@ -693,7 +710,9 @@ export async function POST(request: Request) {
     typeof payload.uploadedCardType === "string" && payload.uploadedCardType.trim()
       ? payload.uploadedCardType.trim()
       : null;
-  const mappingColumns = resolveMappingColumns(payload);
+  const mappingColumns = ensureRecipientMappingColumns(
+    resolveMappingColumns(payload),
+  );
   try {
     const results: SendResult[] = [];
 
