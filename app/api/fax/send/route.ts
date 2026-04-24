@@ -567,31 +567,7 @@ function resolveMappingColumns(payload: RequestPayload) {
   return {};
 }
 
-function resolveMappingColumns(payload: RequestPayload) {
-  const raw =
-    payload.mappingColumns ??
-    payload.mapping_columns;
 
-  if (!raw) return {};
-
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
-      }
-      return {};
-    } catch {
-      return {};
-    }
-  }
-
-  if (typeof raw === "object" && !Array.isArray(raw)) {
-    return raw as Record<string, unknown>;
-  }
-
-  return {};
-}
 
 export async function POST(request: Request) {
   const apiUrl = getResolvedDirectSendUrl();
