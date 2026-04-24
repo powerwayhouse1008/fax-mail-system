@@ -87,7 +87,39 @@ function readAuthScheme() {
   return "token";
 }
 
-function buildAuthHeader(token: string) {
+type AuthHeader = Record<string, string>;
+
+function createAuthorizationHeader(value: string): AuthHeader {
+  return { Authorization: value };
+}
+
+function parseExplicitAuthHeader(template: string, token: string): AuthHeader {
+  const normalizedTemplate = template.trim();
+  const resolvedValue = normalizedTemplate.replace(/\{\{?token\}?\}/gi, token);
+  const separatorIndex = resolvedValue.indexOf(":");
+
+  if (separatorIndex <= 0) {
+    return createAuthorizationHeader(
+      resolvedValue.includes(token)
+        ? resolvedValue
+        : `${resolvedValue} ${token}`.trim(),
+    );
+  }
+
+  const headerName = resolvedValue.slice(0, separatorIndex).trim();
+  const headerValueTemplate = resolvedValue.slice(separatorIndex + 1).trim();
+  const headerValue = headerValueTemplate.includes(token)
+    ? headerValueTemplate
+    : `${headerValueTemplate} ${token}`.trim();
+
+  if (!headerName) {
+    return createAuthorizationHeader(headerValue);
+  }
+
+  return { [headerName]: headerValue };
+}
+
+function buildAuthHeader(token: string): AuthHeader {
   const trimmed = normalizeAuthToken(token);
   const explicitAuthHeader = readEnv(
     "NEXLINK_AUTH_HEADER",
@@ -95,49 +127,52 @@ function buildAuthHeader(token: string) {
   );
 
   if (explicitAuthHeader) {
-    const normalizedHeader = explicitAuthHeader.replace(/\{\{?token\}?\}/gi, trimmed);
-    return {
-      Authorization: normalizedHeader.includes(trimmed)
-        ? normalizedHeader
-        : `${normalizedHeader} ${trimmed}`.trim(),
-    };
+    return parseExplicitAuthHeader(explicitAuthHeader, trimmed);
   }
 
   const scheme = readAuthScheme();
 
-  return {
-    Authorization: scheme ? `${scheme} ${trimmed}` : trimmed,
-  };
+   return createAuthorizationHeader(scheme ? `${scheme} ${trimmed}` : trimmed);
 }
 function buildAuthHeaderCandidates(token: string) {
   const trimmed = normalizeAuthToken(token);
-  const candidates = new Map<string, string>();
+  const candidates = new Map<string, AuthHeader>();
+  const addCandidate = (header: AuthHeader) => {
+    const serialized = JSON.stringify(
+      Object.keys(header)
+        .sort()
+        .reduce<Record<string, string>>((acc, key) => {
+          acc[key] = header[key];
+          return acc;
+        }, {}),
+    );
+    candidates.set(serialized, header);
+  };
 
   const explicitAuthHeader = readEnv(
     "NEXLINK_AUTH_HEADER",
     "NEXILINK_AUTH_HEADER",
   );
   if (explicitAuthHeader) {
-    const normalizedHeader = explicitAuthHeader.replace(
-      /\{\{?token\}?\}/gi,
-      trimmed,
-    );
-    const value = normalizedHeader.includes(trimmed)
-      ? normalizedHeader
-      : `${normalizedHeader} ${trimmed}`.trim();
-    candidates.set(value, value);
+    addCandidate(parseExplicitAuthHeader(explicitAuthHeader, trimmed));
   }
 
-  const configured = buildAuthHeader(token).Authorization;
-  candidates.set(configured, configured);
+  addCandidate(buildAuthHeader(token));
 
-  for (const value of [`token ${trimmed}`, `Bearer ${trimmed}`, trimmed]) {
-    candidates.set(value, value);
+  for (const value of [
+    `token ${trimmed}`,
+    `Token ${trimmed}`,
+    `Bearer ${trimmed}`,
+    trimmed,
+  ]) {
+    addCandidate(createAuthorizationHeader(value));
   }
 
-  return Array.from(candidates.values()).map((value) => ({
-    Authorization: value,
-  }));
+   addCandidate({ "X-Auth-Token": trimmed });
+  addCandidate({ "X-API-Token": trimmed });
+  addCandidate({ "X-API-Key": trimmed });
+
+  return Array.from(candidates.values());
 }
 
 function normalizeErrorText(value: string) {
@@ -155,6 +190,7 @@ function normalizeErrorText(value: string) {
 
   return trimmed;
 }
+
 function hasMeaningfulValue(value: unknown): boolean {
   if (typeof value === "string") {
     return value.trim().length > 0;
