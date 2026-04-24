@@ -89,7 +89,22 @@ function readAuthScheme() {
 
 function buildAuthHeader(token: string) {
   const trimmed = normalizeAuthToken(token);
+   const explicitAuthHeader = readEnv(
+    "NEXLINK_AUTH_HEADER",
+    "NEXILINK_AUTH_HEADER",
+  );
+
+  if (explicitAuthHeader) {
+    const normalizedHeader = explicitAuthHeader.replace(/\{\{?token\}?\}/gi, trimmed);
+    return {
+      Authorization: normalizedHeader.includes(trimmed)
+        ? normalizedHeader
+        : `${normalizedHeader} ${trimmed}`.trim(),
+    };
+  }
+
   const scheme = readAuthScheme();
+
   return {
      Authorization: scheme ? `${scheme} ${trimmed}` : trimmed,
   };
