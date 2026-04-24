@@ -625,19 +625,7 @@ function resolveMappingColumns(payload: RequestPayload) {
 function ensureRecipientMappingColumns(
   mappingColumns: Record<string, unknown>,
 ) {
-  const entries = Object.entries(mappingColumns);
-  const hasFaxOrEmailColumn = entries.some(([key, value]) => {
-    if (typeof value !== "string" || !value.trim()) return false;
-    const normalizedKey = key.trim().toLowerCase();
-    return normalizedKey === "fax" || normalizedKey === "email";
-  });
-
-  if (hasFaxOrEmailColumn) return mappingColumns;
-
-  return {
-    ...mappingColumns,
-    fax: "fax_number",
-  };
+   return mappingColumns;
 }
 
 
