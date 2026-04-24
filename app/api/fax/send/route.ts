@@ -238,6 +238,10 @@ function hasMeaningfulValue(value: unknown): boolean {
 
 function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
   const defaultStatusMessage = (() => {
+    if (status === 429) {
+      return "送信上限に達しました (HTTP 429) / 時間をおいて再試行してください";
+    }
+
     if (status === 401) {
       return "認証エラー (HTTP 401) / APIトークン・NEXLINK_AUTH_SCHEME・APIエンドポイントを確認してください";
     }
@@ -258,7 +262,19 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
 
   if (data && typeof data === "object") {
     const record = data as Record<string, unknown>;
+   const applicationErrorCode =
+      typeof record.application_error_code === "string"
+        ? record.application_error_code.trim()
+        : "";
+    const baseMessage = typeof record.base === "string" ? record.base.trim() : "";
 
+    if (status === 429 && applicationErrorCode === "0000002") {
+      const additionalDetail = baseMessage
+        ? ` / base: ${baseMessage}`
+        : "";
+      return `送信上限に達しました (HTTP 429) / application_error_code: 0000002${additionalDetail} / 一定時間後に再試行してください`;
+    }
+    
     for (const key of ["message", "error", "detail", "title"]) {
       const value = record[key];
       if (typeof value === "string" && value.trim()) {
@@ -266,8 +282,8 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
       }
     }
 
-    if (typeof record.application_error_code === "string" && record.application_error_code.trim()) {
-      details.unshift(`application_error_code: ${record.application_error_code.trim()}`);
+    if (applicationErrorCode) {
+      details.unshift(`application_error_code: ${applicationErrorCode}`);
     }
 
     if (Array.isArray(record.errors)) {
