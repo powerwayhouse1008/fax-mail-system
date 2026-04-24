@@ -464,8 +464,8 @@ async function sendDirectFax(params: {
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
-    name: "json_object" | "multipart_recipient_file";
-    mappingMode: "object" | "none";
+    name: "json_object" | "json_string" | "multipart_recipient_file";
+    mappingMode: "object" | "string" | "none";
     buildInit: (authHeader: AuthHeader) => RequestInit;
   }> = [
     {
@@ -481,6 +481,22 @@ async function sendDirectFax(params: {
         body: JSON.stringify({
           ...baseRequestBody,
           mapping_columns: normalizedMappingColumns,
+        }),
+      }),
+      },
+    {
+      name: "json_string",
+      mappingMode: "string",
+      buildInit: (authHeader) => ({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify({
+          ...baseRequestBody,
+          mapping_columns: JSON.stringify(normalizedMappingColumns),
         }),
       }),
     },
@@ -501,6 +517,10 @@ async function sendDirectFax(params: {
           params.allowInternationalFax ? "1" : "0",
         );
         formData.append("quality", String(params.quality));
+        formData.append(
+          "mapping_columns",
+          JSON.stringify(normalizedMappingColumns),
+        );
         if (params.uploadedCardUrl) {
           formData.append("uploaded_card_url", params.uploadedCardUrl);
         }
@@ -535,13 +555,7 @@ async function sendDirectFax(params: {
         /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
           mappingColumnErrorText,
         );
-      if (isMappingColumnsValidationError && variant.mappingMode === "object") {
-        console.log(
-          `NEXLINK mapping_columns error: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
-        );
-        return response;
-      }
-     if (isMappingColumnsValidationError && variant.mappingMode !== "object") {
+       if (isMappingColumnsValidationError) {
         console.log(
           `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
         );
