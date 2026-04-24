@@ -423,35 +423,21 @@ async function sendDirectFax(params: {
     quality: params.quality,
     uploaded_card_url: params.uploadedCardUrl || null,
   };
-  const formData = new FormData();
-  formData.append("fax_number", params.faxNumber);
-  formData.append("allow_international_fax", String(params.allowInternationalFax));
-  formData.append("quality", String(params.quality));
-
-  if (params.uploadedCardUrl) {
-    const fileResponse = await fetch(params.uploadedCardUrl, { cache: "no-store" });
-    if (!fileResponse.ok) {
-      throw new Error(
-        `名刺ファイルの取得に失敗しました (HTTP ${fileResponse.status})`,
+  const buildMultipartFormData = () => {
+    const formData = new FormData();
+    formData.append("fax_number", params.faxNumber);
+    formData.append(
+      "allow_international_fax",
+      String(params.allowInternationalFax),
+    );
+    formData.append("quality", String(params.quality));
+    if (params.uploadedCardUrl) {
+      formData.append("uploaded_card_url", params.uploadedCardUrl);
       );
     }
 
-    const fileBlob = await fileResponse.blob();
-    const contentType =
-      params.uploadedCardType?.trim() ||
-      fileBlob.type ||
-      fileResponse.headers.get("content-type") ||
-      "application/octet-stream";
-    const fallbackExtension = contentType.startsWith("image/")
-      ? contentType.replace("image/", "")
-      : "bin";
-    const filename =
-      params.uploadedCardName?.trim() ||
-      `uploaded-card.${fallbackExtension}`;
-
-    const file = new File([fileBlob], filename, { type: contentType });
-    formData.append("image", file, filename);
-  }
+     return formData;
+  };
   
   console.log("NEXLINK direct_send url =", params.apiUrl);
   console.log("NEXLINK direct_send body =", requestBody);
@@ -460,26 +446,49 @@ async function sendDirectFax(params: {
 
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
-
+const requestVariants: Array<{
+    name: "json" | "multipart";
+    buildInit: (authHeader: AuthHeader) => RequestInit;
+  }> = [
+    {
+      name: "json",
+      buildInit: (authHeader) => ({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify(requestBody),
+      }),
+    },
+    {
+      name: "multipart",
+      buildInit: (authHeader) => ({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          ...authHeader,
+        },
+        body: buildMultipartFormData(),
+      }),
+    },
+  ];
   for (let index = 0; index < authHeaderCandidates.length; index += 1) {
     const authHeader = authHeaderCandidates[index];
-    const response = await fetchJsonWithRetry(params.apiUrl, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        ...authHeader,
-      },
-      body: formData,
-    });
+     for (const variant of requestVariants) {
+      const response = await fetchJsonWithRetry(
+        params.apiUrl,
+        variant.buildInit(authHeader),
+      );
 
-    lastResponse = response;
-    if (response.status !== 401) {
-      return response;
-    }
+      lastResponse = response;
+      if (response.status !== 401) {
+        return response;
+      }
 
-    if (index < authHeaderCandidates.length - 1) {
       console.log(
-        `NEXLINK auth retry: received HTTP 401 with candidate ${index + 1}/${authHeaderCandidates.length}`,
+        `NEXLINK auth/content retry: HTTP 401 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
       );
     }
   }
