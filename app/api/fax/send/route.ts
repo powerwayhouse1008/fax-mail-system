@@ -155,6 +155,23 @@ function normalizeErrorText(value: string) {
 
   return trimmed;
 }
+function hasMeaningfulValue(value: unknown): boolean {
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => hasMeaningfulValue(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some((item) =>
+      hasMeaningfulValue(item),
+    );
+  }
+
+  return value !== null && value !== undefined;
+}
 
 function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
   const defaultStatusMessage = (() => {
@@ -227,7 +244,7 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
     }
 
     const jsonText = JSON.stringify(record);
-    if (jsonText && jsonText !== "{}") {
+     if (jsonText && jsonText !== "{}" && hasMeaningfulValue(record)) {
       return `${defaultStatusMessage} / RAW_JSON: ${jsonText}`;
     }
 
