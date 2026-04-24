@@ -319,7 +319,16 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
 
   return defaultStatusMessage;
 }
+function isAuthRetryableError(status: number, data: unknown, rawText: string) {
+  if (status === 401 || status === 403) return true;
 
+  if (status !== 400) return false;
+
+  const combined = `${JSON.stringify(data ?? "")} ${rawText}`.toLowerCase();
+  return /0010001|token\s*required|api[_\s-]*token\s*required|base\s*:\s*token\s*required/.test(
+    combined,
+  );
+}
 function parseRetryAfterMs(retryAfterHeader: string | null) {
   if (!retryAfterHeader) return 0;
 
@@ -570,12 +579,12 @@ async function sendDirectFax(params: {
         );
         continue;
       }
-      if (response.status !== 401) {
+       if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
         return response;
       }
 
       console.log(
-        `NEXLINK auth/content retry: HTTP 401 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}, headers=${authHeaderKeys}`,
+        `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}, headers=${authHeaderKeys}`,
       );
     }
   }
