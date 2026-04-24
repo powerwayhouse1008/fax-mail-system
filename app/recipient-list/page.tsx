@@ -66,6 +66,11 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const [attachments, setAttachments] = useState<
      { filename: string; content?: string; url?: string; type: string }[]
   >([]);
+  const [uploadedCard, setUploadedCard] = useState<{
+    url: string;
+    name: string;
+    type: string;
+  } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [sendMessage, setSendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
@@ -143,9 +148,16 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
             .map((line) => `<p>${line}</p>`)
             .join("");
 
-           const uploadedCardUrl = parsed.uploadedCard?.url ?? parsed.uploadedCard?.dataUrl;
+          const uploadedCardUrl = parsed.uploadedCard?.url ?? parsed.uploadedCard?.dataUrl;
           const uploadedCardType = parsed.uploadedCard?.type ?? "";
           const uploadedCardName = parsed.uploadedCard?.name ?? "名刺";
+          if (uploadedCardUrl) {
+            setUploadedCard({
+              url: uploadedCardUrl,
+              type: uploadedCardType,
+              name: uploadedCardName,
+            });
+          }
           const businessCardHtml = uploadedCardUrl
             ? uploadedCardType.startsWith("image/")
               ? `<p><strong>名刺:</strong></p><p><img src="${uploadedCardUrl}" alt="${uploadedCardName}" style="max-width:100%;height:auto;border-radius:8px;" /></p>`
@@ -210,6 +222,9 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
                 html: mailBodyHtml,
                 text: mailBodyText,
                 attachments,
+                uploadedCardUrl: uploadedCard?.url,
+                uploadedCardName: uploadedCard?.name,
+                uploadedCardType: uploadedCard?.type,
               }),
             })
           : Promise.resolve(null),
