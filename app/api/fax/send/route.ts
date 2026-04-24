@@ -127,6 +127,18 @@ function normalizeErrorText(value: string) {
 }
 
 function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
+  const defaultStatusMessage = (() => {
+    if (status === 401) {
+      return "認証エラー (HTTP 401) / APIトークン・NEXLINK_AUTH_SCHEME・APIエンドポイントを確認してください";
+    }
+
+    if (status === 404) {
+      return "エンドポイントが見つかりません (HTTP 404)";
+    }
+
+    return `送信エラー (HTTP ${status})`;
+  })();
+
   const details: string[] = [];
 
   if (typeof data === "string") {
@@ -184,21 +196,18 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
       return details.join(" / ");
     }
 
-    return `RAW_JSON: ${JSON.stringify(record)}`;
+    const jsonText = JSON.stringify(record);
+    if (jsonText && jsonText !== "{}") {
+      return `${defaultStatusMessage} / RAW_JSON: ${jsonText}`;
+    }
+
+    return defaultStatusMessage;
   }
 
   const normalizedFallback = normalizeErrorText(fallbackText);
   if (normalizedFallback) return normalizedFallback;
 
-  if (status === 401) {
-   return "認証エラー (HTTP 401) / APIトークン・NEXLINK_AUTH_SCHEME・APIエンドポイントを確認してください";
-  }
-
-  if (status === 404) {
-    return "エンドポイントが見つかりません (HTTP 404)";
-  }
-
-  return `送信エラー (HTTP ${status})`;
+  return defaultStatusMessage;
 }
 
 function parseRetryAfterMs(retryAfterHeader: string | null) {
