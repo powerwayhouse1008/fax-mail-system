@@ -77,11 +77,21 @@ function normalizeAuthToken(token: string) {
     .replace(/^token\s*=\s*/i, "")
     .trim();
 }
+function readAuthScheme() {
+  const scheme = readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME")
+    .toLowerCase()
+    .trim();
+
+  if (scheme === "bearer") return "Bearer";
+  if (scheme === "raw") return "";
+  return "token";
+}
 
 function buildAuthHeader(token: string) {
   const trimmed = normalizeAuthToken(token);
+  const scheme = readAuthScheme();
   return {
-    Authorization: `token ${trimmed}`,
+     Authorization: scheme ? `${scheme} ${trimmed}` : trimmed,
   };
 }
 
@@ -166,7 +176,7 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
   if (normalizedFallback) return normalizedFallback;
 
   if (status === 401) {
-    return "認証エラー (HTTP 401)";
+   return "認証エラー (HTTP 401) / APIトークン・NEXLINK_AUTH_SCHEME・APIエンドポイントを確認してください";
   }
 
   if (status === 404) {
