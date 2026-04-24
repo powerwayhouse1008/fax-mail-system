@@ -464,7 +464,7 @@ async function sendDirectFax(params: {
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
-    name: "json_object" | "json_stringified";
+    name: "json_object" | "json_stringified" | "multipart_recipient_file";
     mappingMode: "object" | "string";
     buildInit: (authHeader: AuthHeader) => RequestInit;
   }> = [
@@ -500,6 +500,41 @@ async function sendDirectFax(params: {
         }),
       }),
     },
+     {
+      name: "multipart_recipient_file",
+      mappingMode: "string",
+      buildInit: (authHeader) => {
+        const formData = new FormData();
+        const recipientListCsv = `fax_number\n${params.faxNumber}\n`;
+        const recipientListFile = new Blob([recipientListCsv], {
+          type: "text/csv",
+        });
+
+        formData.append("file", recipientListFile, "recipient-list.csv");
+        formData.append("fax_number", params.faxNumber);
+        formData.append(
+          "allow_international_fax",
+          params.allowInternationalFax ? "1" : "0",
+        );
+        formData.append("quality", String(params.quality));
+        if (params.uploadedCardUrl) {
+          formData.append("uploaded_card_url", params.uploadedCardUrl);
+        }
+        formData.append(
+          "mapping_columns",
+          JSON.stringify(normalizedMappingColumns),
+        );
+
+        return {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            ...authHeader,
+          },
+          body: formData,
+        };
+      },
+    },
   ];
   for (let index = 0; index < authHeaderCandidates.length; index += 1) {
     const authHeader = authHeaderCandidates[index];
@@ -515,9 +550,23 @@ async function sendDirectFax(params: {
       const isMappingColumnsValidationError =
         response.status === 422 &&
         /0130001|mapping_columns/i.test(mappingColumnErrorText);
+      const isRecipientListFileValidationError =
+        response.status === 422 &&
+        /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
+          mappingColumnErrorText,
+        );
       if (isMappingColumnsValidationError && variant.mappingMode === "object") {
         console.log(
           `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying stringified mapping_columns`,
+        );
+        continue;
+      }
+      if (
+        isRecipientListFileValidationError &&
+        variant.name !== "multipart_recipient_file"
+      ) {
+        console.log(
+          `NEXLINK recipient-list retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart file payload`,
         );
         continue;
       }
