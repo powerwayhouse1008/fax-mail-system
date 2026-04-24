@@ -242,6 +242,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
                 html: mailBodyHtml,
                 text: mailBodyText,
                 attachments,
+                mappingColumns: {},
               }),
             })
           : Promise.resolve(null),
