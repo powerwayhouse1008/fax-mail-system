@@ -89,7 +89,7 @@ function readAuthScheme() {
 
 function buildAuthHeader(token: string) {
   const trimmed = normalizeAuthToken(token);
-   const explicitAuthHeader = readEnv(
+  const explicitAuthHeader = readEnv(
     "NEXLINK_AUTH_HEADER",
     "NEXILINK_AUTH_HEADER",
   );
@@ -106,8 +106,38 @@ function buildAuthHeader(token: string) {
   const scheme = readAuthScheme();
 
   return {
-     Authorization: scheme ? `${scheme} ${trimmed}` : trimmed,
+    Authorization: scheme ? `${scheme} ${trimmed}` : trimmed,
   };
+}
+function buildAuthHeaderCandidates(token: string) {
+  const trimmed = normalizeAuthToken(token);
+  const candidates = new Map<string, string>();
+
+  const explicitAuthHeader = readEnv(
+    "NEXLINK_AUTH_HEADER",
+    "NEXILINK_AUTH_HEADER",
+  );
+  if (explicitAuthHeader) {
+    const normalizedHeader = explicitAuthHeader.replace(
+      /\{\{?token\}?\}/gi,
+      trimmed,
+    );
+    const value = normalizedHeader.includes(trimmed)
+      ? normalizedHeader
+      : `${normalizedHeader} ${trimmed}`.trim();
+    candidates.set(value, value);
+  }
+
+  const configured = buildAuthHeader(token).Authorization;
+  candidates.set(configured, configured);
+
+  for (const value of [`token ${trimmed}`, `Bearer ${trimmed}`, trimmed]) {
+    candidates.set(value, value);
+  }
+
+  return Array.from(candidates.values()).map((value) => ({
+    Authorization: value,
+  }));
 }
 
 function normalizeErrorText(value: string) {
@@ -371,14 +401,36 @@ async function sendDirectFax(params: {
   const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
   console.log("NEXLINK token preview =", maskedToken);
 
-  return fetchJsonWithRetry(params.apiUrl, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      ...buildAuthHeader(params.apiToken),
-    },
-    body: formData,
-  });
+  const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
+  let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
+
+  for (let index = 0; index < authHeaderCandidates.length; index += 1) {
+    const authHeader = authHeaderCandidates[index];
+    const response = await fetchJsonWithRetry(params.apiUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...authHeader,
+      },
+      body: formData,
+    });
+
+    lastResponse = response;
+    if (response.status !== 401) {
+      return response;
+    }
+
+    if (index < authHeaderCandidates.length - 1) {
+      console.log(
+        `NEXLINK auth retry: received HTTP 401 with candidate ${index + 1}/${authHeaderCandidates.length}`,
+      );
+    }
+  }
+
+  if (!lastResponse) {
+    throw new Error("NEXLINK API 応答が取得できませんでした。");
+  }
+  return lastResponse;
 }
 function parseRequestMethodOverride(payload: RequestPayload) {
   const method = (payload as Record<string, unknown>).method;
