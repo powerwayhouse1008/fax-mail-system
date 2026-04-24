@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
-const DEFAULT_API_PATH = "/api/v1/contact_lists";
+const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 3;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
