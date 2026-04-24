@@ -70,6 +70,8 @@ function normalizeAuthToken(token: string) {
     .replace(/^['"]|['"]$/g, "")
     .replace(/^authorization\s*:\s*/i, "")
     .replace(/^token\s+/i, "")
+    .replace(/^bearer\s+/i, "")
+    .replace(/^token\s*=\s*/i, "")
     .trim();
 }
 
@@ -296,7 +298,8 @@ async function sendDirectFax(params: {
 
   console.log("NEXLINK direct_send url =", params.apiUrl);
   console.log("NEXLINK direct_send body =", requestBody);
-  console.log("NEXLINK token preview =", `[${params.apiToken}]`);
+  const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
+  console.log("NEXLINK token preview =", maskedToken);
 
   return fetchJsonWithRetry(params.apiUrl, {
     method: "POST",
@@ -307,6 +310,11 @@ async function sendDirectFax(params: {
     },
     body: JSON.stringify(requestBody),
   });
+}
+function parseRequestMethodOverride(payload: RequestPayload) {
+  const method = (payload as Record<string, unknown>).method;
+  if (typeof method !== "string") return "POST";
+  return method.trim().toUpperCase() || "POST";
 }
 
 export async function POST(request: Request) {
@@ -334,7 +342,13 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-
+ const requestMethod = parseRequestMethodOverride(payload);
+  if (requestMethod !== "POST") {
+    return NextResponse.json(
+      { error: "NEXLINK direct_send は POST + JSON で呼び出してください。" },
+      { status: 400 },
+    );
+  }
   const faxNumbers = Array.isArray(payload.faxNumbers)
     ? payload.faxNumbers
         .filter((item): item is string => typeof item === "string")
