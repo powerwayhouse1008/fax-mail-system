@@ -464,8 +464,8 @@ async function sendDirectFax(params: {
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
-    name: "json_object" | "json_stringified" | "multipart_recipient_file";
-    mappingMode: "object" | "string";
+    name: "json_object" | "multipart_recipient_file";
+    mappingMode: "object" | "none";
     buildInit: (authHeader: AuthHeader) => RequestInit;
   }> = [
     {
@@ -484,25 +484,9 @@ async function sendDirectFax(params: {
         }),
       }),
     },
-    {
-      name: "json_stringified",
-      mappingMode: "string",
-      buildInit: (authHeader) => ({
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          ...authHeader,
-        },
-        body: JSON.stringify({
-          ...baseRequestBody,
-          mapping_columns: JSON.stringify(normalizedMappingColumns),
-        }),
-      }),
-    },
      {
       name: "multipart_recipient_file",
-      mappingMode: "string",
+      mappingMode: "none",
       buildInit: (authHeader) => {
         const formData = new FormData();
         const recipientListCsv = `fax_number\n${params.faxNumber}\n`;
@@ -520,10 +504,6 @@ async function sendDirectFax(params: {
         if (params.uploadedCardUrl) {
           formData.append("uploaded_card_url", params.uploadedCardUrl);
         }
-        formData.append(
-          "mapping_columns",
-          JSON.stringify(normalizedMappingColumns),
-        );
 
         return {
           method: "POST",
@@ -561,9 +541,9 @@ async function sendDirectFax(params: {
         );
         return response;
       }
-      if (isMappingColumnsValidationError && variant.mappingMode === "string") {
+     if (isMappingColumnsValidationError && variant.mappingMode !== "object") {
         console.log(
-          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, skipping string payload=${variant.name}`,
+          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
         );
         continue;
       }
