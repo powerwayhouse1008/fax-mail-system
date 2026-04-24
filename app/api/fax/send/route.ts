@@ -433,10 +433,9 @@ async function sendDirectFax(params: {
     formData.append("quality", String(params.quality));
     if (params.uploadedCardUrl) {
       formData.append("uploaded_card_url", params.uploadedCardUrl);
-      );
     }
 
-     return formData;
+    return formData;
   };
   
   console.log("NEXLINK direct_send url =", params.apiUrl);
@@ -446,7 +445,7 @@ async function sendDirectFax(params: {
 
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
-const requestVariants: Array<{
+  const requestVariants: Array<{
     name: "json" | "multipart";
     buildInit: (authHeader: AuthHeader) => RequestInit;
   }> = [
@@ -476,7 +475,7 @@ const requestVariants: Array<{
   ];
   for (let index = 0; index < authHeaderCandidates.length; index += 1) {
     const authHeader = authHeaderCandidates[index];
-     for (const variant of requestVariants) {
+    for (const variant of requestVariants) {
       const response = await fetchJsonWithRetry(
         params.apiUrl,
         variant.buildInit(authHeader),
@@ -529,7 +528,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
- const requestMethod = parseRequestMethodOverride(payload);
+  const requestMethod = parseRequestMethodOverride(payload);
   if (requestMethod !== "POST") {
     return NextResponse.json(
       { error: "NEXLINK direct_send は POST + JSON で呼び出してください。" },
