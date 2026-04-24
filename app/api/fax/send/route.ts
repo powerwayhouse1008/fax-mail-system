@@ -441,27 +441,36 @@ async function sendDirectFax(params: {
   uploadedCardType?: string | null;
   mappingColumns?: Record<string, unknown>;
 }) {
-  const requestBody = {
+  const normalizedMappingColumns = JSON.parse(
+    JSON.stringify(params.mappingColumns ?? {}),
+  ) as Record<string, unknown>;
+  const baseRequestBody = {
     fax_number: params.faxNumber,
     allow_international_fax: params.allowInternationalFax,
     quality: params.quality,
-    uploaded_card_url: params.uploadedCardUrl || null,
-    mapping_columns: params.mappingColumns ?? {},
+    ...(params.uploadedCardUrl
+      ? { uploaded_card_url: params.uploadedCardUrl }
+      : {}),
   };
   
   console.log("NEXLINK direct_send url =", params.apiUrl);
-  console.log("NEXLINK direct_send body =", requestBody);
+  console.log("NEXLINK direct_send body =", {
+    ...baseRequestBody,
+    mapping_columns: normalizedMappingColumns,
+  });
   const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
   console.log("NEXLINK token preview =", maskedToken);
 
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
-    name: "json";
+    name: "json_object" | "json_stringified";
+    mappingMode: "object" | "string";
     buildInit: (authHeader: AuthHeader) => RequestInit;
   }> = [
     {
-      name: "json",
+      name: "json_object",
+      mappingMode: "object",
       buildInit: (authHeader) => ({
         method: "POST",
         headers: {
@@ -469,7 +478,26 @@ async function sendDirectFax(params: {
           "Content-Type": "application/json",
           ...authHeader,
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          ...baseRequestBody,
+          mapping_columns: normalizedMappingColumns,
+        }),
+      }),
+    },
+    {
+      name: "json_stringified",
+      mappingMode: "string",
+      buildInit: (authHeader) => ({
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...authHeader,
+        },
+        body: JSON.stringify({
+          ...baseRequestBody,
+          mapping_columns: JSON.stringify(normalizedMappingColumns),
+        }),
       }),
     },
   ];
@@ -483,6 +511,16 @@ async function sendDirectFax(params: {
       );
 
       lastResponse = response;
+      const mappingColumnErrorText = `${JSON.stringify(response.data ?? "")} ${response.rawText}`;
+      const isMappingColumnsValidationError =
+        response.status === 422 &&
+        /0130001|mapping_columns/i.test(mappingColumnErrorText);
+      if (isMappingColumnsValidationError && variant.mappingMode === "object") {
+        console.log(
+          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying stringified mapping_columns`,
+        );
+        continue;
+      }
       if (response.status !== 401) {
         return response;
       }
@@ -502,6 +540,31 @@ function parseRequestMethodOverride(payload: RequestPayload) {
   const method = (payload as Record<string, unknown>).method;
   if (typeof method !== "string") return "POST";
   return method.trim().toUpperCase() || "POST";
+}
+function resolveMappingColumns(payload: RequestPayload) {
+  const raw =
+    payload.mappingColumns ??
+    payload.mapping_columns;
+
+  if (!raw) return {};
+
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+
+  return {};
 }
 
 function resolveMappingColumns(payload: RequestPayload) {
