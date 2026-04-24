@@ -163,6 +163,10 @@ function buildAuthHeaderCandidates(token: string) {
     `token ${trimmed}`,
     `Token ${trimmed}`,
     `Bearer ${trimmed}`,
+    `token=${trimmed}`,
+    `Token token=${trimmed}`,
+    `Token token="${trimmed}"`,
+    `token token=${trimmed}`,
     trimmed,
   ]) {
     addCandidate(createAuthorizationHeader(value));
