@@ -557,7 +557,13 @@ async function sendDirectFax(params: {
         );
       if (isMappingColumnsValidationError && variant.mappingMode === "object") {
         console.log(
-          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying stringified mapping_columns`,
+          `NEXLINK mapping_columns error: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
+        );
+        return response;
+      }
+      if (isMappingColumnsValidationError && variant.mappingMode === "string") {
+        console.log(
+          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, skipping string payload=${variant.name}`,
         );
         continue;
       }
