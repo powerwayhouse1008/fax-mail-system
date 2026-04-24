@@ -13,6 +13,7 @@ type RequestPayload = {
   uploadedCardUrl?: unknown;
   uploadedCardName?: unknown;
   uploadedCardType?: unknown;
+  mappingColumns?: unknown;
 };
 
 type SendResult =
@@ -437,26 +438,14 @@ async function sendDirectFax(params: {
   uploadedCardUrl?: string | null;
   uploadedCardName?: string | null;
   uploadedCardType?: string | null;
+  mappingColumns?: Record<string, unknown>;
 }) {
   const requestBody = {
     fax_number: params.faxNumber,
     allow_international_fax: params.allowInternationalFax,
     quality: params.quality,
     uploaded_card_url: params.uploadedCardUrl || null,
-  };
-  const buildMultipartFormData = () => {
-    const formData = new FormData();
-    formData.append("fax_number", params.faxNumber);
-    formData.append(
-      "allow_international_fax",
-      String(params.allowInternationalFax),
-    );
-    formData.append("quality", String(params.quality));
-    if (params.uploadedCardUrl) {
-      formData.append("uploaded_card_url", params.uploadedCardUrl);
-    }
-
-    return formData;
+    mapping_columns: params.mappingColumns ?? {},
   };
   
   console.log("NEXLINK direct_send url =", params.apiUrl);
@@ -467,7 +456,7 @@ async function sendDirectFax(params: {
   const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
-    name: "json" | "multipart";
+    name: "json";
     buildInit: (authHeader: AuthHeader) => RequestInit;
   }> = [
     {
@@ -480,17 +469,6 @@ async function sendDirectFax(params: {
           ...authHeader,
         },
         body: JSON.stringify(requestBody),
-      }),
-    },
-    {
-      name: "multipart",
-      buildInit: (authHeader) => ({
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          ...authHeader,
-        },
-        body: buildMultipartFormData(),
       }),
     },
   ];
@@ -600,6 +578,10 @@ export async function POST(request: Request) {
     typeof payload.uploadedCardType === "string" && payload.uploadedCardType.trim()
       ? payload.uploadedCardType.trim()
       : null;
+  const mappingColumns =
+    payload.mappingColumns && typeof payload.mappingColumns === "object" && !Array.isArray(payload.mappingColumns)
+      ? (payload.mappingColumns as Record<string, unknown>)
+      : {};
   try {
     const results: SendResult[] = [];
 
@@ -613,6 +595,7 @@ export async function POST(request: Request) {
         uploadedCardUrl,
         uploadedCardName,
         uploadedCardType,
+        mappingColumns,
       });
 
       console.log("NEXLINK direct_send status =", response.status);
@@ -637,6 +620,7 @@ export async function POST(request: Request) {
               fax_number: target.normalized,
               allow_international_fax: allowInternationalFax,
               quality,
+              mapping_columns: mappingColumns,
             },
           },
         });
