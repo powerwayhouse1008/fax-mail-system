@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
 const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
-const MAX_RETRY_ATTEMPTS = 3;
+const MAX_RETRY_ATTEMPTS = 5;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
 
 type RequestPayload = {
@@ -262,17 +262,30 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
 
   if (data && typeof data === "object") {
     const record = data as Record<string, unknown>;
-   const applicationErrorCode =
+    const applicationErrorCode =
       typeof record.application_error_code === "string"
         ? record.application_error_code.trim()
         : "";
     const baseMessage = typeof record.base === "string" ? record.base.trim() : "";
-
-    if (status === 429 && applicationErrorCode === "0000002") {
-      const additionalDetail = baseMessage
-        ? ` / base: ${baseMessage}`
+   const retryAfterSeconds =
+      typeof record.retry_after === "number"
+        ? record.retry_after
+        : typeof record.retry_after === "string"
+          ? Number(record.retry_after)
+          : typeof record.retryAfter === "number"
+            ? record.retryAfter
+            : typeof record.retryAfter === "string"
+              ? Number(record.retryAfter)
+              : null;
+    const retryAfterText =
+      retryAfterSeconds !== null &&
+      Number.isFinite(retryAfterSeconds) &&
+      retryAfterSeconds > 0
+        ? ` / retry_after: ${Math.ceil(retryAfterSeconds)}秒`
         : "";
-      return `送信上限に達しました (HTTP 429) / application_error_code: 0000002${additionalDetail} / 一定時間後に再試行してください`;
+    if (status === 429 && applicationErrorCode === "0000002") {
+       const additionalDetail = baseMessage ? ` / base: ${baseMessage}` : "";
+      return `送信上限に達しました (HTTP 429) / application_error_code: 0000002${retryAfterText}${additionalDetail} / 一定時間後に再試行してください`;
     }
     
     for (const key of ["message", "error", "detail", "title"]) {
@@ -360,12 +373,12 @@ function parseRetryAfterMs(retryAfterHeader: string | null) {
 
 function computeRetryDelayMs(attempt: number, retryAfterHeader: string | null) {
   const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-  if (retryAfterMs > 0) return Math.min(retryAfterMs, 10_000);
+   if (retryAfterMs > 0) return Math.min(retryAfterMs, 120_000);
 
   const baseDelay = 500;
   const jitter = Math.floor(Math.random() * 250);
   const exponentialDelay = baseDelay * 2 ** attempt;
-  return Math.min(exponentialDelay + jitter, 5_000);
+  return Math.min(exponentialDelay + jitter, 15_000);
 }
 
 function sleep(ms: number) {
