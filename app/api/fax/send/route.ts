@@ -5,6 +5,10 @@ const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 5;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
+const AUTH_FALLBACK_ENV_KEYS = [
+  "NEXLINK_ENABLE_AUTH_FALLBACK",
+  "NEXILINK_ENABLE_AUTH_FALLBACK",
+] as const;
 
 type RequestPayload = {
   faxNumbers?: unknown;
@@ -200,6 +204,21 @@ function buildAuthHeaderCandidates(token: string) {
   }
 
   return Array.from(candidates.values());
+}
+
+function isTruthyEnvValue(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
+function shouldUseAggressiveAuthFallback() {
+  for (const key of AUTH_FALLBACK_ENV_KEYS) {
+    const value = process.env[key];
+    if (typeof value === "string" && value.trim()) {
+      return isTruthyEnvValue(value);
+    }
+  }
+  return false;
 }
 
 function normalizeErrorText(value: string) {
@@ -526,14 +545,23 @@ async function sendDirectFax(params: {
   });
   const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
   console.log("NEXLINK token preview =", maskedToken);
-  const authTokenBodyCandidates = [
-    {},
-    { token: params.apiToken },
-    { api_token: params.apiToken },
-    { base: { token: params.apiToken } },
-    { base: { api_token: params.apiToken } },
-  ] as const;
-  const authHeaderCandidates = buildAuthHeaderCandidates(params.apiToken);
+  const aggressiveAuthFallback = shouldUseAggressiveAuthFallback();
+  const authTokenBodyCandidates = aggressiveAuthFallback
+    ? ([
+        {},
+        { token: params.apiToken },
+        { api_token: params.apiToken },
+        { base: { token: params.apiToken } },
+        { base: { api_token: params.apiToken } },
+      ] as const)
+    : ([{}] as const);
+  const authHeaderCandidates = aggressiveAuthFallback
+    ? buildAuthHeaderCandidates(params.apiToken)
+    : [buildAuthHeader(params.apiToken)];
+  console.log(
+    "NEXLINK auth fallback mode =",
+    aggressiveAuthFallback ? "aggressive" : "strict",
+  );
   
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
@@ -642,6 +670,9 @@ async function sendDirectFax(params: {
           /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
             mappingColumnErrorText,
           );
+         if (response.status === 429) {
+          return response;
+        }
         if (isMappingColumnsValidationError) {
           console.log(
             `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
