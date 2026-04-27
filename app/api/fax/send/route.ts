@@ -643,7 +643,9 @@ async function sendDirectFax(params: {
           params.apiUrl,
           buildMultipartInit(authHeader),
         );
-       buildMultipartInit(authHeader),
+        lastResponse = multipartResponse;
+        if (multipartResponse.status === 429) {
+          return multipartResponse;
         }
         if (
           !isAuthRetryableError(
