@@ -825,7 +825,6 @@ export async function POST(request: Request) {
           to: target.original,
           success: false,
           error: `HTTP ${response.status} / ${detailWithRetryAfter}`,
-          )}`,
           raw: {
             status: response.status,
             data: response.data,
