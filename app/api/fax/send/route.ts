@@ -21,6 +21,8 @@ type RequestPayload = {
   allowInternationalFax?: unknown;
   faxQuality?: unknown;
   fax_quality?: unknown;
+  usePrintHeader?: unknown;
+  use_print_header?: unknown;
   subject?: unknown;
   text?: unknown;
   html?: unknown;
@@ -307,6 +309,17 @@ function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
   if (rawFaxQuality === "1") return 1;
   return DEFAULT_FAX_QUALITY;
 }
+function resolveUsePrintHeader(payload: RequestPayload): 0 | 1 {
+  const rawUsePrintHeader = payload.use_print_header ?? payload.usePrintHeader;
+  if (rawUsePrintHeader === 0 || rawUsePrintHeader === "0" || rawUsePrintHeader === false) {
+    return 0;
+  }
+  if (rawUsePrintHeader === 1 || rawUsePrintHeader === "1" || rawUsePrintHeader === true) {
+    return 1;
+  }
+  return 0;
+}
+
 function normalizeMappingColumns(
   value: unknown,
 ): Record<string, number> | null {
@@ -722,6 +735,7 @@ async function createFacsimile(
   contactListId: number | string,
   allowInternationalFax: boolean,
   faxQuality: 0 | 1,
+  usePrintHeader: 0 | 1,
 ) {
   const url = buildUrl(baseUrl, API_PATH_FACSIMILES);
 
@@ -736,6 +750,7 @@ async function createFacsimile(
       contact_list_id: contactListId,
       allow_international_fax: allowInternationalFax,
       fax_quality: faxQuality,
+      use_print_header: usePrintHeader,
     }),
   }));
 
@@ -881,6 +896,7 @@ export async function POST(request: Request) {
       ? payload.allowInternationalFax
       : false;
   const faxQuality = resolveFaxQuality(payload);
+  const usePrintHeader = resolveUsePrintHeader(payload);
   const mappingColumns = resolveMappingColumns(payload);
   const baseUrl = getBaseUrl();
 
@@ -901,6 +917,7 @@ export async function POST(request: Request) {
           contactList.contactListId,
           allowInternationalFax,
           faxQuality,
+          usePrintHeader,
         );
         const content = await uploadFacsimileContent(
           baseUrl,
