@@ -305,32 +305,58 @@ function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
   if (rawFaxQuality === "1") return 1;
   return DEFAULT_FAX_QUALITY;
 }
+function normalizeMappingColumns(
+  value: unknown,
+): Record<string, number> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length === 0) return null;
+
+  const normalizedEntries: Array<[string, number]> = [];
+
+  for (const [key, rawIndex] of entries) {
+    if (!key.trim()) return null;
+
+    let index: number | null = null;
+    if (typeof rawIndex === "number" && Number.isInteger(rawIndex) && rawIndex >= 0) {
+      index = rawIndex;
+    } else if (
+      typeof rawIndex === "string" &&
+      /^\d+$/.test(rawIndex.trim())
+    ) {
+      index = Number.parseInt(rawIndex.trim(), 10);
+    }
+
+    if (index == null) return null;
+    normalizedEntries.push([key, index]);
+  }
+
+  return Object.fromEntries(normalizedEntries);
+}
 function resolveMappingColumns(payload: RequestPayload): Record<string, unknown> {
   const rawMappingColumns = payload.mapping_columns ?? payload.mappingColumns;
 
   if (!rawMappingColumns) {
-    return { recipient: "FAX" };
+     return { fax: 0 };
   }
 
-  if (
-    typeof rawMappingColumns === "object" &&
-    !Array.isArray(rawMappingColumns)
-  ) {
-    return rawMappingColumns as Record<string, unknown>;
+ const normalizedObject = normalizeMappingColumns(rawMappingColumns);
+  if (normalizedObject) {
+    return normalizedObject;
   }
 
   if (typeof rawMappingColumns === "string") {
     try {
       const parsed = JSON.parse(rawMappingColumns);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
-      }
+     const normalizedParsed = normalizeMappingColumns(parsed);
+      if (normalizedParsed) return normalizedParsed;
     } catch {
       // fallback to default mapping below
     }
   }
 
-  return { recipient: "FAX" };
+  return { fax: 0 };
 }
 
 function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
@@ -651,7 +677,7 @@ async function createContactList(
       new Blob([csvBuffer], { type: "text/csv; charset=CP932" }),
       "recipient-list.csv",
     );
-  formData.append("mapping_columns", JSON.stringify(mappingColumns));
+    formData.append("mapping_columns", JSON.stringify(mappingColumns));
     return {
       method: "POST",
       headers: {
