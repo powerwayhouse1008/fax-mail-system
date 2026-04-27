@@ -20,6 +20,7 @@ type RequestPayload = {
   faxQuality?: unknown;
   fax_quality?: unknown;
   attachments?: unknown;
+  attachment?: unknown;
 };
 
 type AttachmentPayload = {
@@ -299,11 +300,30 @@ function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
   const record = data as Record<string, unknown>;
   return (record[key] as T) ?? null;
 }
+function hasAttachmentSource(value: unknown): value is AttachmentPayload {
+  if (!value || typeof value !== "object") return false;
+  const attachment = value as AttachmentPayload;
+  return Boolean(
+    (typeof attachment.content === "string" && attachment.content.trim()) ||
+      (typeof attachment.url === "string" && attachment.url.trim()),
+  );
+}
 
 function resolveAttachment(payload: RequestPayload): AttachmentPayload | null {
-  if (!Array.isArray(payload.attachments)) return null;
-  const candidate = payload.attachments.find((item) => item && typeof item === "object");
-  return candidate ? (candidate as AttachmentPayload) : null;
+  if (Array.isArray(payload.attachments)) {
+    const candidate = payload.attachments.find(hasAttachmentSource);
+    if (candidate) return candidate;
+  }
+
+  if (hasAttachmentSource(payload.attachment)) {
+    return payload.attachment;
+  }
+
+  if (hasAttachmentSource(payload.attachments)) {
+    return payload.attachments;
+  }
+
+  return null;
 }
 
 async function readAttachmentBinary(attachment: AttachmentPayload) {
@@ -316,7 +336,11 @@ async function readAttachmentBinary(attachment: AttachmentPayload) {
       : "application/pdf";
 
   if (typeof attachment.content === "string" && attachment.content.trim()) {
-    const base64 = attachment.content.trim();
+    const rawContent = attachment.content.trim();
+    const base64 = rawContent.startsWith("data:")
+      ? (rawContent.split(",", 2)[1] ?? "")
+      : rawContent;
+    if (!base64) return null;
     const binary = Buffer.from(base64, "base64");
     return { filename, mimeType, binary };
   }
