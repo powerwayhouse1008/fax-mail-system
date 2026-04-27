@@ -591,9 +591,9 @@ async function sendDirectFax(params: {
   faxNumber: string;
   allowInternationalFax: boolean;
   faxQuality: 0 | 1;
-  mappingColumnsJson: string;
+  mappingColumns: Record<string, unknown>;
 }) {
-  const normalizedMappingColumns = params.mappingColumnsJson;
+  const normalizedMappingColumnsJson = JSON.stringify(params.mappingColumns);
   const recipientListCsv = `FAX\n${params.faxNumber}\n`;
   const recipientListFile = new Blob([recipientListCsv], {
     type: "text/csv",
@@ -606,7 +606,7 @@ async function sendDirectFax(params: {
   console.log("NEXLINK direct_send url =", params.apiUrl);
   console.log("NEXLINK direct_send body =", {
     ...baseRequestBody,
-    mapping_columns: normalizedMappingColumns,
+    mapping_columns: normalizedMappingColumnsJson,
     recipient_list_file: "recipient-list.csv",
   });
   const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
@@ -630,7 +630,19 @@ async function sendDirectFax(params: {
     );
     formData.append("fax_quality", String(params.faxQuality));
     formData.append("token", params.apiToken);
-    formData.append("mapping_columns", normalizedMappingColumns);
+    formData.append("mapping_columns", normalizedMappingColumnsJson);
+    for (const [key, value] of Object.entries(params.mappingColumns)) {
+      if (typeof key !== "string" || key.trim() === "") continue;
+      const normalizedValue =
+        value == null
+          ? ""
+          : typeof value === "string"
+            ? value
+            : typeof value === "number" || typeof value === "boolean"
+              ? String(value)
+              : JSON.stringify(value);
+      formData.append(`mapping_columns[${key}]`, normalizedValue);
+    }
 
     return {
       method: "POST",
@@ -711,11 +723,6 @@ function ensureRecipientMappingColumns(mappingColumns: Record<string, unknown>) 
   return normalized;
 }
 
-function resolveMappingColumnsJson(payload: RequestPayload) {
-  const normalized = ensureRecipientMappingColumns(resolveMappingColumns(payload));
-  return JSON.stringify(normalized);
-}
-
 function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
   const rawFaxQuality = payload.fax_quality ?? payload.faxQuality;
   if (rawFaxQuality === 0 || rawFaxQuality === 1) return rawFaxQuality;
@@ -777,7 +784,8 @@ export async function POST(request: Request) {
       : false;
 
   const faxQuality = resolveFaxQuality(payload);
-  const mappingColumnsJson = resolveMappingColumnsJson(payload);
+  const mappingColumns = ensureRecipientMappingColumns(resolveMappingColumns(payload));
+  const mappingColumnsJson = JSON.stringify(mappingColumns);
   try {
     const results: SendResult[] = [];
 
@@ -791,7 +799,7 @@ export async function POST(request: Request) {
           faxNumber: target.normalized,
           allowInternationalFax,
           faxQuality,
-          mappingColumnsJson,
+          mappingColumns,
         });
         response = candidateResponse;
         selectedEndpoint = candidateApiUrl;
