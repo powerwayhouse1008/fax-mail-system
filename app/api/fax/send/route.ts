@@ -565,9 +565,8 @@ async function sendDirectFax(params: {
   
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
   const requestVariants: Array<{
-    name: "json_object" | "json_string" | "multipart_recipient_file";
-    mappingMode: "object" | "string" | "none";
-    buildInit: (authHeader: AuthHeader) => RequestInit;
+    name: "json_object" | "multipart_recipient_file";
+    mappingMode: "object" | "none";
   }> = [
     {
       name: "json_object",
@@ -583,23 +582,6 @@ async function sendDirectFax(params: {
           ...baseRequestBody,
           ...authTokenBodyCandidates[0],
           mapping_columns: normalizedMappingColumns,
-        }),
-      }),
-      },
-    {
-      name: "json_string",
-      mappingMode: "string",
-      buildInit: (authHeader) => ({
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          ...authHeader,
-          ...authTokenBodyCandidates[0],
-        },
-        body: JSON.stringify({
-          ...baseRequestBody,
-          mapping_columns: JSON.stringify(normalizedMappingColumns),
         }),
       }),
     },
@@ -620,10 +602,6 @@ async function sendDirectFax(params: {
           params.allowInternationalFax ? "1" : "0",
         );
         formData.append("quality", String(params.quality));
-        formData.append(
-          "mapping_columns",
-          JSON.stringify(normalizedMappingColumns),
-        );
         formData.append("token", params.apiToken);
         if (params.uploadedCardUrl) {
           formData.append("uploaded_card_url", params.uploadedCardUrl);
@@ -656,7 +634,7 @@ async function sendDirectFax(params: {
                   ...authTokenBodyCandidate,
                   ...(variant.mappingMode === "object"
                     ? { mapping_columns: normalizedMappingColumns }
-                    : { mapping_columns: JSON.stringify(normalizedMappingColumns) }),
+                   : {}),
                 }),
               },
         );
