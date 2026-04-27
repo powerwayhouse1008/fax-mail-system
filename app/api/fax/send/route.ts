@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
-const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
-const DIRECT_SEND_API_PATH_CANDIDATES = [
-  "/api/v1/facsimiles/direct_send",
-  "/api/v1/facsimile/direct_send",
-  "/api/v1/direct_send",
-] as const;
 const DEFAULT_FAX_QUALITY = 1;
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 5;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
+
+const API_PATH_CONTACT_LIST = "/api/v1/contact_lists";
+const API_PATH_FACSIMILES = "/api/v1/facsimiles";
+
 const AUTH_FALLBACK_ENV_KEYS = [
   "NEXLINK_ENABLE_AUTH_FALLBACK",
   "NEXILINK_ENABLE_AUTH_FALLBACK",
@@ -21,8 +19,14 @@ type RequestPayload = {
   allowInternationalFax?: unknown;
   faxQuality?: unknown;
   fax_quality?: unknown;
-  mappingColumns?: unknown;
-  mapping_columns?: unknown;
+  attachments?: unknown;
+};
+
+type AttachmentPayload = {
+  filename?: unknown;
+  content?: unknown;
+  url?: unknown;
+  type?: unknown;
 };
 
 type SendResult =
@@ -38,6 +42,8 @@ type SendResult =
       error: string;
       raw?: unknown;
     };
+
+type AuthHeader = Record<string, string>;
 
 function readEnv(...keys: string[]) {
   for (const key of keys) {
@@ -87,6 +93,7 @@ function normalizeAuthToken(token: string) {
     .replace(/^token\s*=\s*/i, "")
     .trim();
 }
+
 function readAuthScheme() {
   const scheme = readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME")
     .toLowerCase()
@@ -96,8 +103,6 @@ function readAuthScheme() {
   if (scheme === "raw") return "";
   return "token";
 }
-
-type AuthHeader = Record<string, string>;
 
 function createAuthorizationHeader(value: string): AuthHeader {
   return { Authorization: value };
@@ -141,9 +146,9 @@ function buildAuthHeader(token: string): AuthHeader {
   }
 
   const scheme = readAuthScheme();
-
   return createAuthorizationHeader(scheme ? `${scheme} ${trimmed}` : trimmed);
 }
+
 function buildAuthHeaderCandidates(token: string) {
   const trimmed = normalizeAuthToken(token);
   const candidates = new Map<string, AuthHeader>();
@@ -169,42 +174,15 @@ function buildAuthHeaderCandidates(token: string) {
 
   addCandidate(buildAuthHeader(token));
 
-  const authorizationCandidates: AuthHeader[] = [];
-
   for (const value of [
     `token ${trimmed}`,
     `Token ${trimmed}`,
     `Bearer ${trimmed}`,
     `token=${trimmed}`,
     `Token token=${trimmed}`,
-    `Token token="${trimmed}"`,
-    `token token=${trimmed}`,
     trimmed,
   ]) {
-    const header = createAuthorizationHeader(value);
-    authorizationCandidates.push(header);
-    addCandidate(header);
-  }
-
-  const tokenHeaderCandidates: AuthHeader[] = [
-    { "X-Auth-Token": trimmed },
-    { "X-API-Token": trimmed },
-    { "X-API-Key": trimmed },
-    { "Api-Token": trimmed },
-    { "X-Access-Token": trimmed },
-  ];
-
-  for (const tokenHeader of tokenHeaderCandidates) {
-    addCandidate(tokenHeader);
-  }
-
-  for (const authorizationHeader of authorizationCandidates) {
-    for (const tokenHeader of tokenHeaderCandidates) {
-      addCandidate({
-        ...authorizationHeader,
-        ...tokenHeader,
-      });
-    }
+    addCandidate(createAuthorizationHeader(value));
   }
 
   return Array.from(candidates.values());
@@ -223,197 +201,6 @@ function shouldUseAggressiveAuthFallback() {
     }
   }
   return false;
-}
-
-function normalizeErrorText(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-
-  if (/<\/?[a-z][\s\S]*>/i.test(trimmed)) {
-    return trimmed
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  return trimmed;
-}
-
-function hasMeaningfulValue(value: unknown): boolean {
-  if (typeof value === "string") {
-    return value.trim().length > 0;
-  }
-
-  if (Array.isArray(value)) {
-    return value.some((item) => hasMeaningfulValue(item));
-  }
-
-  if (value && typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).some((item) =>
-      hasMeaningfulValue(item),
-    );
-  }
-
-  return value !== null && value !== undefined;
-}
-
-function isRateLimitExceededError(data: unknown) {
-  if (!data || typeof data !== "object") return false;
-  const record = data as Record<string, unknown>;
-  const code =
-    typeof record.application_error_code === "string"
-      ? record.application_error_code.trim()
-      : "";
-  return code === "0000002";
-}
-
-function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
-  const defaultStatusMessage = (() => {
-    if (status === 429) {
-      return "送信上限に達しました (HTTP 429) / 時間をおいて再試行してください";
-    }
-
-    if (status === 401) {
-      return "認証エラー (HTTP 401) / APIトークン・NEXLINK_AUTH_SCHEME・APIエンドポイントを確認してください";
-    }
-
-    if (status === 404) {
-      return "エンドポイントが見つかりません (HTTP 404)";
-    }
-
-    return `送信エラー (HTTP ${status})`;
-  })();
-
-  const details: string[] = [];
-
-  if (typeof data === "string") {
-    const normalized = normalizeErrorText(data);
-    if (normalized) return normalized;
-  }
-
-  if (data && typeof data === "object") {
-    const record = data as Record<string, unknown>;
-    const applicationErrorCode =
-      typeof record.application_error_code === "string"
-        ? record.application_error_code.trim()
-        : "";
-    const baseMessage = typeof record.base === "string" ? record.base.trim() : "";
-    const retryAfterSeconds =
-      typeof record.retry_after === "number"
-        ? record.retry_after
-        : typeof record.retry_after === "string"
-          ? Number(record.retry_after)
-          : typeof record.retryAfter === "number"
-            ? record.retryAfter
-            : typeof record.retryAfter === "string"
-              ? Number(record.retryAfter)
-              : null;
-    const retryAfterText =
-      retryAfterSeconds !== null &&
-      Number.isFinite(retryAfterSeconds) &&
-      retryAfterSeconds > 0
-        ? ` / retry_after: ${Math.ceil(retryAfterSeconds)}秒`
-        : "";
-    if (status === 429 && applicationErrorCode === "0000002") {
-      const additionalDetail = baseMessage ? ` / base: ${baseMessage}` : "";
-      return `送信上限に達しました (HTTP 429) / application_error_code: 0000002${retryAfterText}${additionalDetail} / 一定時間後に再試行してください`;
-    }
-
-    for (const key of ["message", "error", "detail", "title"]) {
-      const value = record[key];
-      if (typeof value === "string" && value.trim()) {
-        details.push(`${key}: ${value.trim()}`);
-      }
-    }
-
-    if (applicationErrorCode) {
-      details.unshift(`application_error_code: ${applicationErrorCode}`);
-    }
-
-    if (Array.isArray(record.errors)) {
-      for (const item of record.errors) {
-        if (typeof item === "string" && item.trim()) {
-          details.push(item.trim());
-          continue;
-        }
-        if (item && typeof item === "object") {
-          const r = item as Record<string, unknown>;
-          if (typeof r.message === "string" && r.message.trim()) {
-            details.push(r.message.trim());
-          }
-          if (typeof r.detail === "string" && r.detail.trim()) {
-            details.push(r.detail.trim());
-          }
-        }
-      }
-    }
-
-    if (Array.isArray(record.details)) {
-      for (const item of record.details) {
-        if (!item || typeof item !== "object") continue;
-        const r = item as Record<string, unknown>;
-        const parameter =
-          typeof r.parameter === "string" ? r.parameter.trim() : "";
-        const message =
-          typeof r.message === "string" ? r.message.trim() : "";
-
-        if (parameter && message) details.push(`${parameter}: ${message}`);
-        else if (message) details.push(message);
-      }
-    }
-
-    if (details.length > 0) {
-      const joinedDetails = details.join(" / ");
-      const isGenericBadRequest =
-        status === 400 &&
-        /(^|[\s:/-])bad request($|[\s:/-])/i.test(joinedDetails);
-      if (isGenericBadRequest) {
-        return `${joinedDetails} / リクエスト内容を確認してください (recipient list CSV・fax_quality・mapping_columns・NEXLINK_API_PATHS)`;
-      }
-      return joinedDetails;
-    }
-
-    const jsonText = JSON.stringify(record);
-    if (jsonText && jsonText !== "{}" && hasMeaningfulValue(record)) {
-      return `${defaultStatusMessage} / RAW_JSON: ${jsonText}`;
-    }
-
-    return defaultStatusMessage;
-  }
-
-  const normalizedFallback = normalizeErrorText(fallbackText);
-  if (normalizedFallback) {
-    const isGenericBadRequest =
-      status === 400 &&
-      /(^|[\s:/-])bad request($|[\s:/-])/i.test(normalizedFallback);
-    if (isGenericBadRequest) {
-      return `${normalizedFallback} / リクエスト内容を確認してください (recipient list CSV・fax_quality・mapping_columns・NEXLINK_API_PATHS)`;
-    }
-    return normalizedFallback;
-  }
-
-  return defaultStatusMessage;
-}
-function isAuthRetryableError(status: number, data: unknown, rawText: string) {
-  if (status === 401 || status === 403) return true;
-
-  if (status !== 400) return false;
-
-  const combined = `${JSON.stringify(data ?? "")} ${rawText}`.toLowerCase();
-  return /0010001|token\s*required|api[_\s-]*token\s*required|base\s*:\s*token\s*required/.test(
-    combined,
-  );
-}
-function isBadRequestRetryableAsMultipart(data: unknown, rawText: string) {
-  const combined = `${JSON.stringify(data ?? "")} ${rawText}`.toLowerCase();
-  return (
-    /bad request/.test(combined) &&
-    /(fax_number|fax_quality|quality|mapping_columns|request body|request parameter|recipient.*file|file)/.test(
-      combined,
-    )
-  );
 }
 
 function parseRetryAfterMs(retryAfterHeader: string | null) {
@@ -451,28 +238,16 @@ async function fetchJsonWithRetry(
   status: number;
   data: unknown;
   rawText: string;
-  retryAfterSeconds: number | null;
 }> {
   let response: Response | null = null;
   let rawText = "";
   let data: unknown = null;
-  let retryAfterSeconds: number | null = null;
-  let lastFetchError: unknown = null;
 
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
-    try {
-      response = await fetch(url, {
-        ...init,
-        cache: "no-store",
-      });
-    } catch (error) {
-      lastFetchError = error;
-      if (attempt < MAX_RETRY_ATTEMPTS - 1) {
-        await sleep(computeRetryDelayMs(attempt, null));
-        continue;
-      }
-      throw error;
-    }
+    response = await fetch(url, {
+      ...init,
+      cache: "no-store",
+    });
 
     rawText = await response.text();
 
@@ -481,25 +256,12 @@ async function fetchJsonWithRetry(
     } catch {
       data = rawText || null;
     }
-    const retryAfterHeader = response.headers.get("retry-after");
-    const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-    retryAfterSeconds = retryAfterMs > 0 ? Math.ceil(retryAfterMs / 1000) : null;
-
-    if (response.status === 429 && isRateLimitExceededError(data)) {
-      return {
-        ok: response.ok,
-        status: response.status,
-        data,
-        rawText,
-        retryAfterSeconds,
-      };
-    }
 
     if (
       RETRYABLE_STATUS_CODES.has(response.status) &&
       attempt < MAX_RETRY_ATTEMPTS - 1
     ) {
-      await sleep(computeRetryDelayMs(attempt, retryAfterHeader));
+      await sleep(computeRetryDelayMs(attempt, response.headers.get("retry-after")));
       continue;
     }
 
@@ -508,219 +270,15 @@ async function fetchJsonWithRetry(
       status: response.status,
       data,
       rawText,
-      retryAfterSeconds,
     };
   }
-
-  if (lastFetchError) throw lastFetchError;
 
   return {
     ok: false,
-    status: 500,
-    data: null,
-    rawText: "",
-    retryAfterSeconds: null,
+    status: response?.status ?? 500,
+    data,
+    rawText,
   };
-}
-
-function getConfiguredApiPaths() {
-  const configuredList = readEnv("NEXLINK_API_PATHS", "NEXILINK_API_PATHS");
-  const splitPaths = configuredList
-    ? configuredList
-        .split(/[,\n]/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : [];
-  const keyedPaths = [
-    readEnv("NEXLINK_API_PATH_DIRECT_SEND", "NEXILINK_API_PATH_DIRECT_SEND"),
-    readEnv(
-      "NEXLINK_API_PATH_FACSIMILE_DIRECT_SEND",
-      "NEXILINK_API_PATH_FACSIMILE_DIRECT_SEND",
-    ),
-    readEnv(
-      "NEXLINK_API_PATH_FACSIMILES_DIRECT_SEND",
-      "NEXILINK_API_PATH_FACSIMILES_DIRECT_SEND",
-    ),
-    readEnv("NEXLINK_API_PATH", "NEXILINK_API_PATH"),
-  ].filter(Boolean);
-
-  const merged = [...splitPaths, ...keyedPaths];
-  return merged.length > 0 ? merged : [DEFAULT_API_PATH];
-}
-function getResolvedDirectSendUrl() {
-  const endpointUrl = readEnv("NEXLINK_FAX_ENDPOINT", "NEXILINK_FAX_ENDPOINT");
-  if (endpointUrl) return endpointUrl;
-
-  const baseUrl =
-    readEnv("NEXLINK_API_BASE_URL", "NEXILINK_API_BASE_URL") || DEFAULT_BASE_URL;
-  const apiPath = getConfiguredApiPaths()[0];
-
-  return new URL(apiPath, baseUrl).toString();
-}
-function getDirectSendUrlCandidates(primaryUrl: string) {
-  const candidates: string[] = [primaryUrl];
-  let parsedPrimary: URL | null = null;
-  try {
-    parsedPrimary = new URL(primaryUrl);
-  } catch {
-    return candidates;
-  }
-
-  const configuredPath = parsedPrimary.pathname.replace(/\/+$/, "");
-  const configuredPaths = getConfiguredApiPaths();
-  for (const apiPath of [...configuredPaths, ...DIRECT_SEND_API_PATH_CANDIDATES]) {
-    const normalizedPath = apiPath.replace(/\/+$/, "");
-    if (normalizedPath === configuredPath) continue;
-    const candidate = new URL(normalizedPath, parsedPrimary.origin).toString();
-    if (!candidates.includes(candidate)) {
-      candidates.push(candidate);
-    }
-  }
-  return candidates;
-}
-
-function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
-  if (!data || typeof data !== "object") return null;
-  const record = data as Record<string, unknown>;
-  return (record[key] as T) ?? null;
-}
-
-async function sendDirectFax(params: {
-  apiUrl: string;
-  apiToken: string;
-  faxNumber: string;
-  allowInternationalFax: boolean;
-  faxQuality: 0 | 1;
-  mappingColumns: Record<string, unknown>;
-}) {
-  const normalizedMappingColumnsJson = JSON.stringify(params.mappingColumns);
-  const recipientListCsv = `FAX\n${params.faxNumber}\n`;
-  const recipientListFile = new Blob([recipientListCsv], {
-    type: "text/csv",
-  });
-  const baseRequestBody = {
-    allow_international_fax: params.allowInternationalFax,
-    fax_quality: params.faxQuality,
-  };
-
-  console.log("NEXLINK direct_send url =", params.apiUrl);
-  console.log("NEXLINK direct_send body =", {
-    ...baseRequestBody,
-    mapping_columns: normalizedMappingColumnsJson,
-    recipient_list_file: "recipient-list.csv",
-  });
-  const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
-  console.log("NEXLINK token preview =", maskedToken);
-  const aggressiveAuthFallback = shouldUseAggressiveAuthFallback();
-  const authHeaderCandidates = aggressiveAuthFallback
-    ? buildAuthHeaderCandidates(params.apiToken)
-    : [buildAuthHeader(params.apiToken)];
-  console.log(
-    "NEXLINK auth fallback mode =",
-    aggressiveAuthFallback ? "aggressive" : "strict",
-  );
-
-  let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
-  const buildMultipartInit = (authHeader: Record<string, string>): RequestInit => {
-    const formData = new FormData();
-    formData.append("file", recipientListFile, "recipient-list.csv");
-    formData.append(
-      "allow_international_fax",
-      params.allowInternationalFax ? "1" : "0",
-    );
-    formData.append("fax_quality", String(params.faxQuality));
-    formData.append("token", params.apiToken);
-    formData.append("mapping_columns", normalizedMappingColumnsJson);
-    for (const [key, value] of Object.entries(params.mappingColumns)) {
-      if (typeof key !== "string" || key.trim() === "") continue;
-      const normalizedValue =
-        value == null
-          ? ""
-          : typeof value === "string"
-            ? value
-            : typeof value === "number" || typeof value === "boolean"
-              ? String(value)
-              : JSON.stringify(value);
-      formData.append(`mapping_columns[${key}]`, normalizedValue);
-    }
-
-    return {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        ...authHeader,
-      },
-      body: formData,
-    };
-  };
-  for (let index = 0; index < authHeaderCandidates.length; index += 1) {
-    const authHeader = authHeaderCandidates[index];
-    const authHeaderKeys = Object.keys(authHeader).join(",");
-    const response = await fetchJsonWithRetry(
-      params.apiUrl,
-      buildMultipartInit(authHeader),
-    );
-    lastResponse = response;
-    if (response.status === 429) {
-      return response;
-    }
-    if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
-      return response;
-    }
-
-    console.log(
-      `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=multipart, headers=${authHeaderKeys}`,
-    );
-  }
-
-  if (!lastResponse) {
-    throw new Error("NEXLINK API 応答が取得できませんでした。");
-  }
-  return lastResponse;
-}
-function parseRequestMethodOverride(payload: RequestPayload) {
-  const method = (payload as Record<string, unknown>).method;
-  if (typeof method !== "string") return "POST";
-  return method.trim().toUpperCase() || "POST";
-}
-function resolveMappingColumns(payload: RequestPayload) {
-  const raw = payload.mappingColumns ?? payload.mapping_columns;
-
-  if (!raw) return {};
-
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>;
-      }
-      return {};
-    } catch {
-      return {};
-    }
-  }
-
-  if (typeof raw === "object" && !Array.isArray(raw)) {
-    return raw as Record<string, unknown>;
-  }
-
-  return {};
-}
-
-function ensureRecipientMappingColumns(mappingColumns: Record<string, unknown>) {
-  const normalized = { ...mappingColumns };
-  const stringValues = Object.values(normalized)
-    .filter((value): value is string => typeof value === "string")
-    .map((value) => value.trim().toUpperCase())
-    .filter(Boolean);
-  const hasFaxOrEmailColumn =
-    stringValues.includes("FAX") || stringValues.includes("EMAIL");
-
-  if (!hasFaxOrEmailColumn) {
-    normalized.recipient = "FAX";
-  }
-
-  return normalized;
 }
 
 function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
@@ -731,9 +289,236 @@ function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
   return DEFAULT_FAX_QUALITY;
 }
 
+function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  return (record[key] as T) ?? null;
+}
+
+function resolveAttachment(payload: RequestPayload): AttachmentPayload | null {
+  if (!Array.isArray(payload.attachments)) return null;
+  const candidate = payload.attachments.find((item) => item && typeof item === "object");
+  return candidate ? (candidate as AttachmentPayload) : null;
+}
+
+async function readAttachmentBinary(attachment: AttachmentPayload) {
+  const filename = typeof attachment.filename === "string" && attachment.filename.trim()
+    ? attachment.filename.trim()
+    : "fax-content.pdf";
+  const mimeType =
+    typeof attachment.type === "string" && attachment.type.trim()
+      ? attachment.type.trim()
+      : "application/pdf";
+
+  if (typeof attachment.content === "string" && attachment.content.trim()) {
+    const base64 = attachment.content.trim();
+    const binary = Buffer.from(base64, "base64");
+    return { filename, mimeType, binary };
+  }
+
+  if (typeof attachment.url === "string" && attachment.url.trim()) {
+    const response = await fetch(attachment.url.trim(), { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`PDF取得に失敗しました (HTTP ${response.status})`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return { filename, mimeType, binary: Buffer.from(arrayBuffer) };
+  }
+
+  return null;
+}
+
+function toArrayBuffer(buffer: Buffer): ArrayBuffer {
+  const arrayBuffer = new ArrayBuffer(buffer.length);
+  const view = new Uint8Array(arrayBuffer);
+  view.set(buffer);
+  return arrayBuffer;
+}
+
+function cp932CsvBuffer(faxNumber: string) {
+  // CSV contains only ASCII (FAX + digits/symbols), which is byte-compatible with CP932.
+  const csv = `FAX\r\n${faxNumber}\r\n`;
+  return Buffer.from(csv, "ascii");
+}
+
+function getBaseUrl() {
+  return readEnv("NEXLINK_API_BASE_URL", "NEXILINK_API_BASE_URL") || DEFAULT_BASE_URL;
+}
+
+function buildUrl(baseUrl: string, path: string) {
+  return new URL(path, baseUrl).toString();
+}
+
+async function callWithAuthFallback(
+  url: string,
+  apiToken: string,
+  buildInit: (header: AuthHeader) => RequestInit,
+) {
+  const aggressiveAuthFallback = shouldUseAggressiveAuthFallback();
+  const authHeaderCandidates = aggressiveAuthFallback
+    ? buildAuthHeaderCandidates(apiToken)
+    : [buildAuthHeader(apiToken)];
+
+  let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
+
+  for (const authHeader of authHeaderCandidates) {
+    const response = await fetchJsonWithRetry(url, buildInit(authHeader));
+    lastResponse = response;
+    if (response.ok) return response;
+    if (response.status !== 401 && response.status !== 403) return response;
+  }
+
+  if (!lastResponse) {
+    throw new Error("NEXLINK API 応答が取得できませんでした。");
+  }
+
+  return lastResponse;
+}
+
+function extractErrorMessage(response: Awaited<ReturnType<typeof fetchJsonWithRetry>>) {
+  if (typeof response.data === "string" && response.data.trim()) return response.data.trim();
+  if (response.data && typeof response.data === "object") {
+    const message =
+      getObjectValue<string>(response.data, "message") ??
+      getObjectValue<string>(response.data, "error") ??
+      getObjectValue<string>(response.data, "detail");
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  return response.rawText || `HTTP ${response.status}`;
+}
+
+async function createContactList(baseUrl: string, apiToken: string, faxNumber: string) {
+  const url = buildUrl(baseUrl, API_PATH_CONTACT_LIST);
+  const csvBuffer = cp932CsvBuffer(faxNumber);
+
+  const response = await callWithAuthFallback(url, apiToken, (authHeader) => {
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new Blob([csvBuffer], { type: "text/csv; charset=CP932" }),
+      "recipient-list.csv",
+    );
+
+    return {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...authHeader,
+      },
+      body: formData,
+    };
+  });
+
+  if (!response.ok) {
+    throw new Error(`宛先リスト作成失敗: ${extractErrorMessage(response)}`);
+  }
+
+  const contactListId =
+    getObjectValue<number | string>(response.data, "id") ??
+    getObjectValue<number | string>(response.data, "contact_list_id");
+
+  if (contactListId == null) {
+    throw new Error("宛先リストIDが取得できませんでした。");
+  }
+
+  return { contactListId, raw: response.data };
+}
+
+async function createFacsimile(
+  baseUrl: string,
+  apiToken: string,
+  contactListId: number | string,
+  allowInternationalFax: boolean,
+  faxQuality: 0 | 1,
+) {
+  const url = buildUrl(baseUrl, API_PATH_FACSIMILES);
+
+  const response = await callWithAuthFallback(url, apiToken, (authHeader) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...authHeader,
+    },
+    body: JSON.stringify({
+      contact_list_id: contactListId,
+      allow_international_fax: allowInternationalFax,
+      fax_quality: faxQuality,
+    }),
+  }));
+
+  if (!response.ok) {
+    throw new Error(`FAX作成失敗: ${extractErrorMessage(response)}`);
+  }
+
+  const facsimileId =
+    getObjectValue<number | string>(response.data, "id") ??
+    getObjectValue<number | string>(response.data, "facsimile_id");
+
+  if (facsimileId == null) {
+    throw new Error("facsimile_id が取得できませんでした。");
+  }
+
+  return { facsimileId, raw: response.data };
+}
+
+async function uploadFacsimileContent(
+  baseUrl: string,
+  apiToken: string,
+  facsimileId: number | string,
+  file: { filename: string; mimeType: string; binary: Buffer },
+) {
+  const url = buildUrl(baseUrl, `${API_PATH_FACSIMILES}/${facsimileId}/contents`);
+
+  const response = await callWithAuthFallback(url, apiToken, (authHeader) => {
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new Blob([toArrayBuffer(file.binary)], { type: file.mimeType || "application/pdf" }),
+      file.filename,
+    );
+
+    return {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...authHeader,
+      },
+      body: formData,
+    };
+  });
+
+  if (!response.ok) {
+    throw new Error(`PDFアップロード失敗: ${extractErrorMessage(response)}`);
+  }
+
+  return response.data;
+}
+
+async function transmitFacsimile(
+  baseUrl: string,
+  apiToken: string,
+  facsimileId: number | string,
+) {
+  const url = buildUrl(baseUrl, `${API_PATH_FACSIMILES}/${facsimileId}/transmission`);
+  const response = await callWithAuthFallback(url, apiToken, (authHeader) => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...authHeader,
+    },
+    body: JSON.stringify({}),
+  }));
+
+  if (!response.ok) {
+    throw new Error(`FAX送信失敗: ${extractErrorMessage(response)}`);
+  }
+
+  return response.data;
+}
+
 export async function POST(request: Request) {
-  const apiUrl = getResolvedDirectSendUrl();
-  const apiUrlCandidates = getDirectSendUrlCandidates(apiUrl);
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
@@ -754,13 +539,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "リクエスト形式が不正です。" }, { status: 400 });
   }
-  const requestMethod = parseRequestMethodOverride(payload);
-  if (requestMethod !== "POST") {
-    return NextResponse.json(
-      { error: "NEXLINK direct_send は POST + JSON で呼び出してください。" },
-      { status: 400 },
-    );
-  }
+
   const faxNumbers = Array.isArray(payload.faxNumbers)
     ? payload.faxNumbers
         .filter((item): item is string => typeof item === "string")
@@ -778,95 +557,80 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "有効なFAX番号がありません。" }, { status: 400 });
   }
 
+  const attachment = resolveAttachment(payload);
+  if (!attachment) {
+    return NextResponse.json(
+      { error: "PDFファイルが必要です。attachments[0] にPDFを指定してください。" },
+      { status: 400 },
+    );
+  }
+
+  let pdfFile: { filename: string; mimeType: string; binary: Buffer } | null = null;
+  try {
+    pdfFile = await readAttachmentBinary(attachment);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "PDFの読み込みに失敗しました。";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  if (!pdfFile) {
+    return NextResponse.json(
+      { error: "PDFファイルが必要です。attachments[0].content または attachments[0].url を指定してください。" },
+      { status: 400 },
+    );
+  }
+
   const allowInternationalFax =
     typeof payload.allowInternationalFax === "boolean"
       ? payload.allowInternationalFax
       : false;
-
   const faxQuality = resolveFaxQuality(payload);
-  const mappingColumns = ensureRecipientMappingColumns(resolveMappingColumns(payload));
-  const mappingColumnsJson = JSON.stringify(mappingColumns);
+  const baseUrl = getBaseUrl();
+
   try {
     const results: SendResult[] = [];
 
     for (const target of validFaxTargets) {
-      let selectedEndpoint = apiUrlCandidates[0];
-      let response: Awaited<ReturnType<typeof sendDirectFax>> | null = null;
-      for (const candidateApiUrl of apiUrlCandidates) {
-        const candidateResponse = await sendDirectFax({
-          apiUrl: candidateApiUrl,
+      try {
+        const contactList = await createContactList(baseUrl, apiToken, target.normalized);
+        const facsimile = await createFacsimile(
+          baseUrl,
           apiToken,
-          faxNumber: target.normalized,
+          contactList.contactListId,
           allowInternationalFax,
           faxQuality,
-          mappingColumns,
+        );
+        const content = await uploadFacsimileContent(
+          baseUrl,
+          apiToken,
+          facsimile.facsimileId,
+          pdfFile,
+        );
+        const transmission = await transmitFacsimile(
+          baseUrl,
+          apiToken,
+          facsimile.facsimileId,
+        );
+
+        results.push({
+          to: target.original,
+          success: true,
+          id: facsimile.facsimileId,
+          raw: {
+            contactList: contactList.raw,
+            facsimile: facsimile.raw,
+            content,
+            transmission,
+          },
         });
-        response = candidateResponse;
-        selectedEndpoint = candidateApiUrl;
-        const shouldTryNextEndpoint =
-          candidateResponse.status === 400 &&
-          apiUrlCandidates.length > 1 &&
-          isBadRequestRetryableAsMultipart(
-            candidateResponse.data,
-            candidateResponse.rawText,
-          );
-        if (!shouldTryNextEndpoint) break;
-        console.log(
-          `NEXLINK endpoint fallback: HTTP 400 on ${candidateApiUrl}, trying next endpoint candidate`,
-        );
-      }
-      if (!response) {
-        throw new Error("NEXLINK API 応答が取得できませんでした。");
-      }
-
-      console.log("NEXLINK direct_send status =", response.status);
-      console.log("NEXLINK direct_send data =", response.data);
-      console.log("NEXLINK direct_send rawText =", response.rawText);
-
-      if (!response.ok) {
-        const detail = extractErrorDetail(
-          response.status,
-          response.data,
-          response.rawText,
-        );
-        const detailWithRetryAfter =
-          response.status === 429 &&
-          response.retryAfterSeconds &&
-          !/retry_after/i.test(detail)
-            ? `${detail} / retry_after: ${response.retryAfterSeconds}秒`
-            : detail;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "不明なエラー";
         results.push({
           to: target.original,
           success: false,
-          error: `HTTP ${response.status} / ${detailWithRetryAfter}`,
-          raw: {
-            status: response.status,
-            data: response.data,
-            rawText: response.rawText,
-            endpoint: selectedEndpoint,
-            endpointCandidatesTried: apiUrlCandidates,
-            requestBody: {
-              recipient_list_csv: `FAX\n${target.normalized}\n`,
-              allow_international_fax: allowInternationalFax,
-              fax_quality: faxQuality,
-              mapping_columns: mappingColumnsJson,
-            },
-          },
+          error: message,
         });
-        continue;
       }
-
-      const id =
-        getObjectValue<number | string>(response.data, "id") ??
-        getObjectValue<number | string>(response.data, "test_facsimile_id") ??
-        getObjectValue<number | string>(response.data, "facsimile_id");
-
-      results.push({
-        to: target.original,
-        success: true,
-        id,
-        raw: response.data,
-      });
     }
 
     const successCount = results.filter((item) => item.success).length;
@@ -876,9 +640,15 @@ export async function POST(request: Request) {
       total: validFaxTargets.length,
       successCount,
       failedCount: failed.length,
-      endpoint: apiUrl,
       results,
       failed,
+      flow: [
+        "POST /api/v1/contact_lists",
+        "POST /api/v1/facsimiles",
+        "POST /api/v1/facsimiles/:facsimile_id/contents",
+        "POST /api/v1/facsimiles/:facsimile_id/transmission",
+      ],
+      csvEncoding: "CP932",
     });
   } catch (error) {
     const message =
