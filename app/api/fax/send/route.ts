@@ -26,6 +26,8 @@ type RequestPayload = {
   body?: unknown;
   attachments?: unknown;
   attachment?: unknown;
+  mapping_columns?: unknown;
+  mappingColumns?: unknown;
 };
 
 type AttachmentPayload = {
@@ -302,6 +304,33 @@ function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
   if (rawFaxQuality === "0") return 0;
   if (rawFaxQuality === "1") return 1;
   return DEFAULT_FAX_QUALITY;
+}
+function resolveMappingColumns(payload: RequestPayload): Record<string, unknown> {
+  const rawMappingColumns = payload.mapping_columns ?? payload.mappingColumns;
+
+  if (!rawMappingColumns) {
+    return { recipient: "FAX" };
+  }
+
+  if (
+    typeof rawMappingColumns === "object" &&
+    !Array.isArray(rawMappingColumns)
+  ) {
+    return rawMappingColumns as Record<string, unknown>;
+  }
+
+  if (typeof rawMappingColumns === "string") {
+    try {
+      const parsed = JSON.parse(rawMappingColumns);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // fallback to default mapping below
+    }
+  }
+
+  return { recipient: "FAX" };
 }
 
 function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
@@ -606,7 +635,12 @@ function extractErrorMessage(response: Awaited<ReturnType<typeof fetchJsonWithRe
   return response.rawText || `HTTP ${response.status}`;
 }
 
-async function createContactList(baseUrl: string, apiToken: string, faxNumber: string) {
+async function createContactList(
+  baseUrl: string,
+  apiToken: string,
+  faxNumber: string,
+  mappingColumns: Record<string, unknown>,
+) {
   const url = buildUrl(baseUrl, API_PATH_CONTACT_LIST);
   const csvBuffer = cp932CsvBuffer(faxNumber);
 
@@ -617,7 +651,7 @@ async function createContactList(baseUrl: string, apiToken: string, faxNumber: s
       new Blob([csvBuffer], { type: "text/csv; charset=CP932" }),
       "recipient-list.csv",
     );
-
+  formData.append("mapping_columns", JSON.stringify(mappingColumns));
     return {
       method: "POST",
       headers: {
@@ -808,6 +842,7 @@ export async function POST(request: Request) {
       ? payload.allowInternationalFax
       : false;
   const faxQuality = resolveFaxQuality(payload);
+  const mappingColumns = resolveMappingColumns(payload);
   const baseUrl = getBaseUrl();
 
   try {
@@ -815,7 +850,12 @@ export async function POST(request: Request) {
 
     for (const target of validFaxTargets) {
       try {
-        const contactList = await createContactList(baseUrl, apiToken, target.normalized);
+        const contactList = await createContactList(
+          baseUrl,
+          apiToken,
+          target.normalized,
+          mappingColumns,
+        );
         const facsimile = await createFacsimile(
           baseUrl,
           apiToken,
