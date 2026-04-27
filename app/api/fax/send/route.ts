@@ -564,121 +564,105 @@ async function sendDirectFax(params: {
   );
   
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
-  const requestVariants: Array<{
-    name: "json_object" | "multipart_recipient_file";
-    mappingMode: "object" | "none";
-    buildInit: (authHeader: Record<string, string>) => RequestInit;
-  }> = [
-    {
-      name: "json_object",
-      mappingMode: "object",
-      buildInit: (authHeader) => ({
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          ...authHeader,
-        },
-        body: JSON.stringify({
-          ...baseRequestBody,
-          ...authTokenBodyCandidates[0],
-          mapping_columns: normalizedMappingColumns,
-        }),
-      }),
+   const buildJsonInit = (
+    authHeader: Record<string, string>,
+    authTokenBodyCandidate: Record<string, unknown>,
+  ): RequestInit => ({
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...authHeader,
     },
-     {
-      name: "multipart_recipient_file",
-      mappingMode: "none",
-      buildInit: (authHeader) => {
-        const formData = new FormData();
-        const recipientListCsv = `FAX\n${params.faxNumber}\n`;
-        const recipientListFile = new Blob([recipientListCsv], {
-          type: "text/csv",
-        });
+     body: JSON.stringify({
+      ...baseRequestBody,
+      ...authTokenBodyCandidate,
+      mapping_columns: normalizedMappingColumns,
+    }),
+  });
+  const buildMultipartInit = (authHeader: Record<string, string>): RequestInit => {
+    const formData = new FormData();
+    const recipientListCsv = `FAX\n${params.faxNumber}\n`;
+    const recipientListFile = new Blob([recipientListCsv], {
+      type: "text/csv",
+    });
 
-        formData.append("file", recipientListFile, "recipient-list.csv");
-        formData.append("fax_number", params.faxNumber);
-        formData.append(
-          "allow_international_fax",
-          params.allowInternationalFax ? "1" : "0",
-        );
-        formData.append("quality", String(params.quality));
-        formData.append("token", params.apiToken);
-        formData.append(
-          "mapping_columns",
-          JSON.stringify(normalizedMappingColumns),
-        );
-        if (params.uploadedCardUrl) {
-          formData.append("uploaded_card_url", params.uploadedCardUrl);
-        }
+       formData.append("file", recipientListFile, "recipient-list.csv");
+    formData.append("fax_number", params.faxNumber);
+    formData.append(
+      "allow_international_fax",
+      params.allowInternationalFax ? "1" : "0",
+    );
+    formData.append("quality", String(params.quality));
+    formData.append("token", params.apiToken);
+    if (params.uploadedCardUrl) {
+      formData.append("uploaded_card_url", params.uploadedCardUrl);
+    }
 
         return {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            ...authHeader,
-          },
-          body: formData,
-        };
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...authHeader,
       },
-    },
-  ];
+    body: formData,
+    };
+  };
   for (let index = 0; index < authHeaderCandidates.length; index += 1) {
     const authHeader = authHeaderCandidates[index];
     const authHeaderKeys = Object.keys(authHeader).join(",");
-    for (const variant of requestVariants) {
-       for (const authTokenBodyCandidate of authTokenBodyCandidates) {
-        const response = await fetchJsonWithRetry(
-          params.apiUrl,
-          variant.name === "multipart_recipient_file"
-            ? variant.buildInit(authHeader)
-            : {
-                ...variant.buildInit(authHeader),
-                body: JSON.stringify({
-                  ...baseRequestBody,
-                  ...authTokenBodyCandidate,
-                  ...(variant.mappingMode === "object"
-                    ? { mapping_columns: normalizedMappingColumns }
-                   : {}),
-                }),
-              },
+    for (const authTokenBodyCandidate of authTokenBodyCandidates) {
+      const response = await fetchJsonWithRetry(
+        params.apiUrl,
+        buildJsonInit(authHeader, authTokenBodyCandidate as Record<string, unknown>),
+      );
+      lastResponse = response;
+      const responseText = `${JSON.stringify(response.data ?? "")} ${response.rawText}`;
+      const isMappingColumnsValidationError =
+        response.status === 422 &&
+        /0130001|mapping_columns/i.test(responseText);
+      const isRecipientListFileValidationError =
+        response.status === 422 &&
+        /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
+          responseText,
         );
-       lastResponse = response;
-        const mappingColumnErrorText = `${JSON.stringify(response.data ?? "")} ${response.rawText}`;
-        const isMappingColumnsValidationError =
-          response.status === 422 &&
-          /0130001|mapping_columns/i.test(mappingColumnErrorText);
-        const isRecipientListFileValidationError =
-          response.status === 422 &&
-          /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
-            mappingColumnErrorText,
-          );
-         if (response.status === 429) {
-          return response;
-        }
-        if (isMappingColumnsValidationError) {
-          console.log(
-            `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}`,
-          );
-          continue;
+      if (response.status === 429) {
+        return response;
+      }
+      if (isMappingColumnsValidationError) {
+        console.log(
+          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=json_object`,
+        );
+        continue;
+      }
+      if (isRecipientListFileValidationError) {
+        console.log(
+          `NEXLINK recipient-list retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart file payload`,
+        );
+        const multipartResponse = await fetchJsonWithRetry(
+          params.apiUrl,
+          buildMultipartInit(authHeader),
+        );
+       buildMultipartInit(authHeader),
         }
         if (
-          isRecipientListFileValidationError &&
-          variant.name !== "multipart_recipient_file"
+          !isAuthRetryableError(
+            multipartResponse.status,
+            multipartResponse.data,
+            multipartResponse.rawText,
+          )
         ) {
-          console.log(
-            `NEXLINK recipient-list retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart file payload`,
-          );
-          continue;
+           return multipartResponse;
         }
-        if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
-          return response;
-        }
-
-        console.log(
-         `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=${variant.name}, headers=${authHeaderKeys}, authBody=${JSON.stringify(authTokenBodyCandidate)}`,
-        );
+        continue;
       }
+      if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
+        return response;
+      }
+    
+      console.log(
+        `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=json_object, headers=${authHeaderKeys}, authBody=${JSON.stringify(authTokenBodyCandidate)}`,
+      );
     }
   }
 
