@@ -567,6 +567,7 @@ async function sendDirectFax(params: {
   const requestVariants: Array<{
     name: "json_object" | "multipart_recipient_file";
     mappingMode: "object" | "none";
+    buildInit: (authHeader: Record<string, string>) => RequestInit;
   }> = [
     {
       name: "json_object",
