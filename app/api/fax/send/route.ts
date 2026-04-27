@@ -19,6 +19,11 @@ type RequestPayload = {
   allowInternationalFax?: unknown;
   faxQuality?: unknown;
   fax_quality?: unknown;
+  subject?: unknown;
+  text?: unknown;
+  html?: unknown;
+  message?: unknown;
+  body?: unknown;
   attachments?: unknown;
   attachment?: unknown;
 };
@@ -462,6 +467,47 @@ function createSimplePdf(lines: string[]) {
   output += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
   return Buffer.from(output, "utf-8");
 }
+function htmlToPlainText(html: string) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<\/(p|div|li|h[1-6]|tr|br)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildPayloadPdfAttachment(payload: RequestPayload): BinaryAttachment | null {
+  const subject = typeof payload.subject === "string" ? payload.subject.trim() : "";
+  const textBodyCandidates = [payload.text, payload.message, payload.body];
+  const textBody = textBodyCandidates.find(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  );
+  const htmlBody = typeof payload.html === "string" ? payload.html.trim() : "";
+  const body = textBody?.trim() || (htmlBody ? htmlToPlainText(htmlBody) : "");
+
+  if (!subject && !body) return null;
+
+  const lines = [
+    subject ? `件名: ${subject}` : "",
+    subject && body ? "" : "",
+    body,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .split(/\r?\n/);
+
+  return {
+    filename: "fax-content.pdf",
+    mimeType: "application/pdf",
+    binary: createSimplePdf(lines),
+  };
+}
 
 function textToPdf(binary: Buffer) {
   const text = binary.toString("utf-8");
@@ -731,28 +777,28 @@ export async function POST(request: Request) {
   }
 
   const attachment = resolveAttachment(payload);
-  if (!attachment) {
-    return NextResponse.json(
-      { error: "PDFファイルが必要です。attachments[0] にPDFを指定してください。" },
-      { status: 400 },
-    );
-  }
-
-   let pdfFile: BinaryAttachment | null = null;
-  try {
-    const attachmentFile = await readAttachmentBinary(attachment);
-    pdfFile = attachmentFile ? await ensurePdfAttachment(attachmentFile) : null;
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "ファイルの読み込み、またはPDF変換に失敗しました。";
-    return NextResponse.json({ error: message }, { status: 400 });
+  let pdfFile: BinaryAttachment | null = null;
+  if (attachment) {
+    try {
+      const attachmentFile = await readAttachmentBinary(attachment);
+      pdfFile = attachmentFile ? await ensurePdfAttachment(attachmentFile) : null;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "ファイルの読み込み、またはPDF変換に失敗しました。";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  } else {
+    pdfFile = buildPayloadPdfAttachment(payload);
   }
 
   if (!pdfFile) {
     return NextResponse.json(
-      { error: "PDFファイルが必要です。attachments[0].content または attachments[0].url を指定してください。" },
+      {
+        error:
+          "PDFファイルが必要です。attachments[0] を指定するか、text/html/subject を含めて本文からPDFを自動生成してください。",
+      },
       { status: 400 },
     );
   }
