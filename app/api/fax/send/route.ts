@@ -26,8 +26,12 @@ type RequestPayload = {
 type AttachmentPayload = {
   filename?: unknown;
   content?: unknown;
+  data?: unknown;
+  base64?: unknown;
   url?: unknown;
   type?: unknown;
+  mimeType?: unknown;
+  file?: unknown;
 };
 type BinaryAttachment = {
   filename: string;
@@ -305,22 +309,63 @@ function hasAttachmentSource(value: unknown): value is AttachmentPayload {
   const attachment = value as AttachmentPayload;
   return Boolean(
     (typeof attachment.content === "string" && attachment.content.trim()) ||
+     (typeof attachment.data === "string" && attachment.data.trim()) ||
+      (typeof attachment.base64 === "string" && attachment.base64.trim()) ||
       (typeof attachment.url === "string" && attachment.url.trim()),
   );
+}
+function toAttachmentPayload(value: unknown): AttachmentPayload | null {
+  if (!value) return null;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    if (/^https?:\/\//i.test(trimmed)) {
+      return { url: trimmed };
+    }
+    return { content: trimmed };
+  }
+
+  if (hasAttachmentSource(value)) {
+    return value;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const nested = toAttachmentPayload(record.file);
+    if (nested) {
+      return {
+        filename: typeof record.filename === "string" ? record.filename : nested.filename,
+        type: typeof record.type === "string" ? record.type : nested.type,
+        mimeType:
+          typeof record.mimeType === "string" ? record.mimeType : nested.mimeType,
+        content: nested.content,
+        data: nested.data,
+        base64: nested.base64,
+        url: nested.url,
+      };
+    }
+  }
+
+  return null;
 }
 
 function resolveAttachment(payload: RequestPayload): AttachmentPayload | null {
   if (Array.isArray(payload.attachments)) {
-    const candidate = payload.attachments.find(hasAttachmentSource);
+    const candidate = payload.attachments
+      .map((item) => toAttachmentPayload(item))
+      .find((item): item is AttachmentPayload => Boolean(item));
     if (candidate) return candidate;
   }
 
-  if (hasAttachmentSource(payload.attachment)) {
-    return payload.attachment;
+  const attachmentField = toAttachmentPayload(payload.attachment);
+  if (attachmentField) {
+    return attachmentField;
   }
 
-  if (hasAttachmentSource(payload.attachments)) {
-    return payload.attachments;
+ const attachmentsField = toAttachmentPayload(payload.attachments);
+  if (attachmentsField) {
+    return attachmentsField;
   }
 
   return null;
@@ -331,12 +376,23 @@ async function readAttachmentBinary(attachment: AttachmentPayload) {
     ? attachment.filename.trim()
     : "fax-content.pdf";
   const mimeType =
-    typeof attachment.type === "string" && attachment.type.trim()
+    typeof attachment.mimeType === "string" && attachment.mimeType.trim()
+      ? attachment.mimeType.trim()
+      : typeof attachment.type === "string" && attachment.type.trim()
       ? attachment.type.trim()
       : "application/pdf";
 
-  if (typeof attachment.content === "string" && attachment.content.trim()) {
-    const rawContent = attachment.content.trim();
+  const contentSource =
+    typeof attachment.content === "string" && attachment.content.trim()
+      ? attachment.content
+      : typeof attachment.data === "string" && attachment.data.trim()
+      ? attachment.data
+      : typeof attachment.base64 === "string" && attachment.base64.trim()
+      ? attachment.base64
+      : "";
+
+  if (contentSource) {
+    const rawContent = contentSource.trim();
     const base64 = rawContent.startsWith("data:")
       ? (rawContent.split(",", 2)[1] ?? "")
       : rawContent;
@@ -351,7 +407,7 @@ async function readAttachmentBinary(attachment: AttachmentPayload) {
       throw new Error(`PDF取得に失敗しました (HTTP ${response.status})`);
     }
     const arrayBuffer = await response.arrayBuffer();
-     const responseMimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
+    const responseMimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
     return {
       filename,
       mimeType: responseMimeType || mimeType,
@@ -361,6 +417,7 @@ async function readAttachmentBinary(attachment: AttachmentPayload) {
 
   return null;
 }
+
 function replaceExtension(filename: string, extension: string) {
   const withoutExtension = filename.replace(/\.[^./\\]+$/, "");
   return `${withoutExtension}${extension}`;
