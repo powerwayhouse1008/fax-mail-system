@@ -24,8 +24,13 @@ RESEND_FROM_EMAIL=onboarding@resend.dev
 # Base URL (sandbox hoặc production)
 NEXLINK_API_BASE_URL=https://sandbox-hea.nexlink2.jp
 
-# ⚠️ PHẢI là direct_send (không được dùng /facsimiles)
-NEXLINK_API_PATH=/api/v1/facsimiles/direct_send
+# Có thể khai báo nhiều API path (thử lần lượt)
+NEXLINK_API_PATHS=/api/v1/facsimiles/direct_send,/api/v1/facsimile/direct_send,/api/v1/direct_send
+
+# Hoặc khai báo tách riêng từng key (optional)
+NEXLINK_API_PATH_DIRECT_SEND=/api/v1/facsimiles/direct_send
+NEXLINK_API_PATH_FACSIMILE_DIRECT_SEND=/api/v1/facsimile/direct_send
+NEXLINK_API_PATH_FACSIMILES_DIRECT_SEND=/api/v1/facsimiles/direct_send
 
 # API TOKEN (không phải password login)
 NEXLINK_API_TOKEN=xxxxxxxxxxxxxxxx
