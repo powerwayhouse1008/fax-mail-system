@@ -223,7 +223,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
                 text: mailBodyText,
                 attachments,
                 fax_quality: 1,
-                mapping_columns: JSON.stringify({ recipient: "FAX" }),
+                mapping_columns: JSON.stringify({ fax: 0 }),
               }),
             })
           : Promise.resolve(null),
