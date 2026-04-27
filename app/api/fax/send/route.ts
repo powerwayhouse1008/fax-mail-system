@@ -236,6 +236,16 @@ function hasMeaningfulValue(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
 
+function isRateLimitExceededError(data: unknown) {
+  if (!data || typeof data !== "object") return false;
+  const record = data as Record<string, unknown>;
+  const code =
+    typeof record.application_error_code === "string"
+      ? record.application_error_code.trim()
+      : "";
+  return code === "0000002";
+}
+
 function extractErrorDetail(status: number, data: unknown, fallbackText: string) {
   const defaultStatusMessage = (() => {
     if (status === 429) {
@@ -393,10 +403,12 @@ async function fetchJsonWithRetry(
   status: number;
   data: unknown;
   rawText: string;
+  retryAfterSeconds: number | null;
 }> {
   let response: Response | null = null;
   let rawText = "";
   let data: unknown = null;
+  let retryAfterSeconds: number | null = null;
   let lastFetchError: unknown = null;
 
   for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt += 1) {
@@ -421,14 +433,28 @@ async function fetchJsonWithRetry(
     } catch {
       data = rawText || null;
     }
+  const retryAfterHeader = response.headers.get("retry-after");
+    const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+    retryAfterSeconds = retryAfterMs > 0 ? Math.ceil(retryAfterMs / 1000) : null;
+
+    if (
+      response.status === 429 &&
+      isRateLimitExceededError(data)
+    ) {
+      return {
+        ok: response.ok,
+        status: response.status,
+        data,
+        rawText,
+        retryAfterSeconds,
+      };
+    }
 
     if (
       RETRYABLE_STATUS_CODES.has(response.status) &&
       attempt < MAX_RETRY_ATTEMPTS - 1
     ) {
-      await sleep(
-        computeRetryDelayMs(attempt, response.headers.get("retry-after")),
-      );
+      await sleep(computeRetryDelayMs(attempt, retryAfterHeader));
       continue;
     }
 
@@ -437,6 +463,7 @@ async function fetchJsonWithRetry(
       status: response.status,
       data,
       rawText,
+     retryAfterSeconds,
     };
   }
 
@@ -447,6 +474,7 @@ async function fetchJsonWithRetry(
     status: 500,
     data: null,
     rawText: "",
+    retryAfterSeconds: null,
   };
 }
 
@@ -782,13 +810,21 @@ export async function POST(request: Request) {
       console.log("NEXLINK direct_send rawText =", response.rawText);
 
       if (!response.ok) {
+        const detail = extractErrorDetail(
+          response.status,
+          response.data,
+          response.rawText,
+        );
+        const detailWithRetryAfter =
+          response.status === 429 &&
+          response.retryAfterSeconds &&
+          !/retry_after/i.test(detail)
+            ? `${detail} / retry_after: ${response.retryAfterSeconds}秒`
+            : detail;
         results.push({
           to: target.original,
           success: false,
-          error: `HTTP ${response.status} / ${extractErrorDetail(
-            response.status,
-            response.data,
-            response.rawText,
+          error: `HTTP ${response.status} / ${detailWithRetryAfter}`,
           )}`,
           raw: {
             status: response.status,
