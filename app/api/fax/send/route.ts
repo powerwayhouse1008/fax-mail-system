@@ -361,7 +361,14 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
     }
 
     if (details.length > 0) {
-      return details.join(" / ");
+     const joinedDetails = details.join(" / ");
+      const isGenericBadRequest =
+        status === 400 &&
+        /(^|[\s:/-])bad request($|[\s:/-])/i.test(joinedDetails);
+      if (isGenericBadRequest) {
+        return `${joinedDetails} / リクエスト内容を確認してください (fax_number・quality・uploaded_card_url・mapping_columns・NEXLINK_API_PATH)`;
+      }
+      return joinedDetails;
     }
 
     const jsonText = JSON.stringify(record);
@@ -373,7 +380,15 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
   }
 
   const normalizedFallback = normalizeErrorText(fallbackText);
-  if (normalizedFallback) return normalizedFallback;
+  if (normalizedFallback) {
+    const isGenericBadRequest =
+      status === 400 &&
+      /(^|[\s:/-])bad request($|[\s:/-])/i.test(normalizedFallback);
+    if (isGenericBadRequest) {
+      return `${normalizedFallback} / リクエスト内容を確認してください (fax_number・quality・uploaded_card_url・mapping_columns・NEXLINK_API_PATH)`;
+    }
+    return normalizedFallback;
+  }
 
   return defaultStatusMessage;
 }
