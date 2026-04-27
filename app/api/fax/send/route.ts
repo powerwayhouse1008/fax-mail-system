@@ -28,6 +28,11 @@ type AttachmentPayload = {
   url?: unknown;
   type?: unknown;
 };
+type BinaryAttachment = {
+  filename: string;
+  mimeType: string;
+  binary: Buffer;
+};
 
 type SendResult =
   | {
@@ -322,10 +327,97 @@ async function readAttachmentBinary(attachment: AttachmentPayload) {
       throw new Error(`PDF取得に失敗しました (HTTP ${response.status})`);
     }
     const arrayBuffer = await response.arrayBuffer();
-    return { filename, mimeType, binary: Buffer.from(arrayBuffer) };
+     const responseMimeType = response.headers.get("content-type")?.split(";")[0]?.trim();
+    return {
+      filename,
+      mimeType: responseMimeType || mimeType,
+      binary: Buffer.from(arrayBuffer),
+    };
   }
 
   return null;
+}
+function replaceExtension(filename: string, extension: string) {
+  const withoutExtension = filename.replace(/\.[^./\\]+$/, "");
+  return `${withoutExtension}${extension}`;
+}
+
+function isPdfBinary(binary: Buffer) {
+  return binary.subarray(0, 4).toString("ascii") === "%PDF";
+}
+
+function escapePdfText(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function createSimplePdf(lines: string[]) {
+  const normalizedLines = lines.slice(0, 90).map((line) => escapePdfText(line.slice(0, 140)));
+  const textOps = normalizedLines.length
+    ? normalizedLines.map((line) => `(${line}) Tj`).join(" T* ")
+    : "( ) Tj";
+  const contentStream = `BT /F1 11 Tf 50 792 Td 14 TL ${textOps} ET`;
+  const contentLength = Buffer.byteLength(contentStream, "utf-8");
+
+  const objects: string[] = [
+    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
+    "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+    `5 0 obj << /Length ${contentLength} >> stream\n${contentStream}\nendstream endobj\n`,
+  ];
+
+  let output = "%PDF-1.4\n";
+  const offsets = [0];
+  for (const obj of objects) {
+    offsets.push(Buffer.byteLength(output, "utf-8"));
+    output += obj;
+  }
+
+  const xrefStart = Buffer.byteLength(output, "utf-8");
+  output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i < offsets.length; i += 1) {
+    output += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+  }
+  output += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return Buffer.from(output, "utf-8");
+}
+
+function textToPdf(binary: Buffer) {
+  const text = binary.toString("utf-8");
+  return createSimplePdf(text.split(/\r?\n/));
+}
+
+async function ensurePdfAttachment(file: BinaryAttachment): Promise<BinaryAttachment> {
+  const mimeType = file.mimeType.toLowerCase();
+
+  if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
+    return { ...file, mimeType: "application/pdf" };
+  }
+
+  if (
+    mimeType === "text/plain" ||
+    mimeType === "text/csv" ||
+    mimeType === "application/json" ||
+    mimeType === "text/markdown"
+  ) {
+    return {
+      filename: replaceExtension(file.filename, ".pdf"),
+      mimeType: "application/pdf",
+      binary: textToPdf(file.binary),
+    };
+  }
+
+  return {
+    filename: replaceExtension(file.filename, ".pdf"),
+    mimeType: "application/pdf",
+    binary: createSimplePdf([
+      "元ファイルをPDFへ自動変換しました。",
+      `ファイル名: ${file.filename}`,
+      `MIMEタイプ: ${file.mimeType}`,
+      "",
+      "※ この形式の本文自動変換には未対応のため、送信用の簡易PDFを生成しています。",
+    ]),
+  };
 }
 
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
@@ -565,11 +657,15 @@ export async function POST(request: Request) {
     );
   }
 
-  let pdfFile: { filename: string; mimeType: string; binary: Buffer } | null = null;
+   let pdfFile: BinaryAttachment | null = null;
   try {
-    pdfFile = await readAttachmentBinary(attachment);
+    const attachmentFile = await readAttachmentBinary(attachment);
+    pdfFile = attachmentFile ? await ensurePdfAttachment(attachmentFile) : null;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "PDFの読み込みに失敗しました。";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "ファイルの読み込み、またはPDF変換に失敗しました。";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
