@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
 const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
+const DEFAULT_FAX_QUALITY = 1;
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 5;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
@@ -82,6 +83,21 @@ function normalizeAuthToken(token: string) {
     .replace(/^bearer\s+/i, "")
     .replace(/^token\s*=\s*/i, "")
     .trim();
+}
+function normalizeUploadedCardUrl(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 function readAuthScheme() {
   const scheme = readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME")
@@ -856,13 +872,10 @@ export async function POST(request: Request) {
   const quality =
     typeof payload.quality === "number" &&
     Number.isInteger(payload.quality) &&
-    payload.quality >= 0
+    payload.quality >= 1
       ? payload.quality
-      : 0;
-  const uploadedCardUrl =
-    typeof payload.uploadedCardUrl === "string" && payload.uploadedCardUrl.trim()
-      ? payload.uploadedCardUrl.trim()
-      : null;
+     : DEFAULT_FAX_QUALITY;
+  const uploadedCardUrl = normalizeUploadedCardUrl(payload.uploadedCardUrl);
   const uploadedCardName =
     typeof payload.uploadedCardName === "string" && payload.uploadedCardName.trim()
       ? payload.uploadedCardName.trim()
