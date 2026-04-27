@@ -318,8 +318,9 @@ function normalizeMappingColumns(
   const normalizedEntries: Array<[string, number]> = [];
 
   for (const [key, rawIndex] of entries) {
-    if (!key.trim()) return null;
-
+    const normalizedKey = key.trim();
+    if (!normalizedKey) return null;
+    
     let index: number | null = null;
     if (typeof rawIndex === "number" && Number.isInteger(rawIndex) && rawIndex >= 0) {
       index = rawIndex;
@@ -331,17 +332,19 @@ function normalizeMappingColumns(
     }
 
     if (index == null) return null;
-    normalizedEntries.push([key, index]);
+    normalizedEntries.push([normalizedKey, index]);
   }
 
   return Object.fromEntries(normalizedEntries);
 }
 function resolveMappingColumns(payload: RequestPayload): Record<string, unknown> {
   const rawMappingColumns = payload.mapping_columns ?? payload.mappingColumns;
- const sanitizeMappingColumns = (mappingColumns: Record<string, number>) => {
+ const isDisallowedMappingColumnKey = (key: string) =>
+    DISALLOWED_MAPPING_COLUMN_KEYS.has(key.trim().toLowerCase());
+  const sanitizeMappingColumns = (mappingColumns: Record<string, number>) => {
     const sanitized = Object.fromEntries(
       Object.entries(mappingColumns).filter(
-        ([key]) => !DISALLOWED_MAPPING_COLUMN_KEYS.has(key),
+        ([key]) => !isDisallowedMappingColumnKey(key),
       ),
     );
 
