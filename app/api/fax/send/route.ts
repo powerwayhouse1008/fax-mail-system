@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
-const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
+const DEFAULT_API_PATH = "/api/v1/contact_lists";
+// Nexlink docs: POST /api/v1/contact_lists
+const DIRECT_SEND_API_PATH_CANDIDATES = [
+  "/api/v1/facsimiles/direct_send",
+  "/api/v1/facsimile/direct_send",
+  "/api/v1/direct_send",
+] as const;
 const DEFAULT_FAX_QUALITY = 1;
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 5;
@@ -549,6 +555,26 @@ function getResolvedDirectSendUrl() {
 
   return new URL(apiPath, baseUrl).toString();
 }
+function getDirectSendUrlCandidates(primaryUrl: string) {
+  const candidates: string[] = [primaryUrl];
+  let parsedPrimary: URL | null = null;
+  try {
+    parsedPrimary = new URL(primaryUrl);
+  } catch {
+    return candidates;
+  }
+
+  const configuredPath = parsedPrimary.pathname.replace(/\/+$/, "");
+  for (const apiPath of DIRECT_SEND_API_PATH_CANDIDATES) {
+    const normalizedPath = apiPath.replace(/\/+$/, "");
+    if (normalizedPath === configuredPath) continue;
+    const candidate = new URL(normalizedPath, parsedPrimary.origin).toString();
+    if (!candidates.includes(candidate)) {
+      candidates.push(candidate);
+    }
+  }
+  return candidates;
+}
 
 function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
   if (!data || typeof data !== "object") return null;
@@ -814,6 +840,7 @@ function ensureRecipientMappingColumns(
 
 export async function POST(request: Request) {
   const apiUrl = getResolvedDirectSendUrl();
+  const apiUrlCandidates = getDirectSendUrlCandidates(apiUrl);
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
@@ -891,17 +918,37 @@ export async function POST(request: Request) {
     const results: SendResult[] = [];
 
     for (const target of validFaxTargets) {
-      const response = await sendDirectFax({
-        apiUrl,
-        apiToken,
-        faxNumber: target.normalized,
-        allowInternationalFax,
-        quality,
-        uploadedCardUrl,
-        uploadedCardName,
-        uploadedCardType,
-        mappingColumns,
-      });
+      let selectedEndpoint = apiUrlCandidates[0];
+      let response: Awaited<ReturnType<typeof sendDirectFax>> | null = null;
+      for (const candidateApiUrl of apiUrlCandidates) {
+        const candidateResponse = await sendDirectFax({
+          apiUrl: candidateApiUrl,
+          apiToken,
+          faxNumber: target.normalized,
+          allowInternationalFax,
+          quality,
+          uploadedCardUrl,
+          uploadedCardName,
+          uploadedCardType,
+          mappingColumns,
+        });
+        response = candidateResponse;
+        selectedEndpoint = candidateApiUrl;
+        const shouldTryNextEndpoint =
+          candidateResponse.status === 400 &&
+          apiUrlCandidates.length > 1 &&
+          isBadRequestRetryableAsMultipart(
+            candidateResponse.data,
+            candidateResponse.rawText,
+          );
+        if (!shouldTryNextEndpoint) break;
+        console.log(
+          `NEXLINK endpoint fallback: HTTP 400 on ${candidateApiUrl}, trying next endpoint candidate`,
+        );
+      }
+      if (!response) {
+        throw new Error("NEXLINK API 応答が取得できませんでした。");
+      }
 
       console.log("NEXLINK direct_send status =", response.status);
       console.log("NEXLINK direct_send data =", response.data);
@@ -927,7 +974,8 @@ export async function POST(request: Request) {
             status: response.status,
             data: response.data,
             rawText: response.rawText,
-            endpoint: apiUrl,
+            endpoint: selectedEndpoint,
+            endpointCandidatesTried: apiUrlCandidates,
             requestBody: {
               fax_number: target.normalized,
               allow_international_fax: allowInternationalFax,
