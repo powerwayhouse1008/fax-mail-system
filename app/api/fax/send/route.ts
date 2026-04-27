@@ -595,6 +595,11 @@ async function sendDirectFax(params: {
     );
     formData.append("quality", String(params.quality));
     formData.append("token", params.apiToken);
+    formData.append("mapping_columns", JSON.stringify(normalizedMappingColumns));
+    Object.entries(normalizedMappingColumns).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      formData.append(`mapping_columns[${key}]`, String(value));
+    });
     if (params.uploadedCardUrl) {
       formData.append("uploaded_card_url", params.uploadedCardUrl);
     }
@@ -631,8 +636,25 @@ async function sendDirectFax(params: {
       }
       if (isMappingColumnsValidationError) {
         console.log(
-          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, payload=json_object`,
+          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart mapping_columns payload`,
         );
+        const multipartResponse = await fetchJsonWithRetry(
+          params.apiUrl,
+          buildMultipartInit(authHeader),
+        );
+        lastResponse = multipartResponse;
+        if (multipartResponse.status === 429) {
+          return multipartResponse;
+        }
+        if (
+          !isAuthRetryableError(
+            multipartResponse.status,
+            multipartResponse.data,
+            multipartResponse.rawText,
+          )
+        ) {
+          return multipartResponse;
+        }
         continue;
       }
       if (isRecipientListFileValidationError) {
