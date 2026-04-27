@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
-const DEFAULT_API_PATH = "/api/v1/contact_lists";
-// Nexlink docs: POST /api/v1/contact_lists
+const DEFAULT_API_PATH = "/api/v1/facsimiles/direct_send";
 const DIRECT_SEND_API_PATH_CANDIDATES = [
   "/api/v1/facsimiles/direct_send",
   "/api/v1/facsimile/direct_send",
@@ -20,10 +19,8 @@ const AUTH_FALLBACK_ENV_KEYS = [
 type RequestPayload = {
   faxNumbers?: unknown;
   allowInternationalFax?: unknown;
-  quality?: unknown;
-  uploadedCardUrl?: unknown;
-  uploadedCardName?: unknown;
-  uploadedCardType?: unknown;
+  faxQuality?: unknown;
+  fax_quality?: unknown;
   mappingColumns?: unknown;
   mapping_columns?: unknown;
 };
@@ -90,21 +87,6 @@ function normalizeAuthToken(token: string) {
     .replace(/^token\s*=\s*/i, "")
     .trim();
 }
-function normalizeUploadedCardUrl(value: unknown) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return parsed.toString();
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 function readAuthScheme() {
   const scheme = readEnv("NEXLINK_AUTH_SCHEME", "NEXILINK_AUTH_SCHEME")
     .toLowerCase()
@@ -160,7 +142,7 @@ function buildAuthHeader(token: string): AuthHeader {
 
   const scheme = readAuthScheme();
 
-   return createAuthorizationHeader(scheme ? `${scheme} ${trimmed}` : trimmed);
+  return createAuthorizationHeader(scheme ? `${scheme} ${trimmed}` : trimmed);
 }
 function buildAuthHeaderCandidates(token: string) {
   const trimmed = normalizeAuthToken(token);
@@ -186,8 +168,8 @@ function buildAuthHeaderCandidates(token: string) {
   }
 
   addCandidate(buildAuthHeader(token));
-  
- const authorizationCandidates: AuthHeader[] = [];
+
+  const authorizationCandidates: AuthHeader[] = [];
 
   for (const value of [
     `token ${trimmed}`,
@@ -199,7 +181,7 @@ function buildAuthHeaderCandidates(token: string) {
     `token token=${trimmed}`,
     trimmed,
   ]) {
-   const header = createAuthorizationHeader(value);
+    const header = createAuthorizationHeader(value);
     authorizationCandidates.push(header);
     addCandidate(header);
   }
@@ -318,7 +300,7 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
         ? record.application_error_code.trim()
         : "";
     const baseMessage = typeof record.base === "string" ? record.base.trim() : "";
-   const retryAfterSeconds =
+    const retryAfterSeconds =
       typeof record.retry_after === "number"
         ? record.retry_after
         : typeof record.retry_after === "string"
@@ -335,10 +317,10 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
         ? ` / retry_after: ${Math.ceil(retryAfterSeconds)}秒`
         : "";
     if (status === 429 && applicationErrorCode === "0000002") {
-       const additionalDetail = baseMessage ? ` / base: ${baseMessage}` : "";
+      const additionalDetail = baseMessage ? ` / base: ${baseMessage}` : "";
       return `送信上限に達しました (HTTP 429) / application_error_code: 0000002${retryAfterText}${additionalDetail} / 一定時間後に再試行してください`;
     }
-    
+
     for (const key of ["message", "error", "detail", "title"]) {
       const value = record[key];
       if (typeof value === "string" && value.trim()) {
@@ -383,18 +365,18 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
     }
 
     if (details.length > 0) {
-     const joinedDetails = details.join(" / ");
+      const joinedDetails = details.join(" / ");
       const isGenericBadRequest =
         status === 400 &&
         /(^|[\s:/-])bad request($|[\s:/-])/i.test(joinedDetails);
       if (isGenericBadRequest) {
-        return `${joinedDetails} / リクエスト内容を確認してください (fax_number・quality・uploaded_card_url・mapping_columns・NEXLINK_API_PATH)`;
+        return `${joinedDetails} / リクエスト内容を確認してください (recipient list CSV・fax_quality・mapping_columns・NEXLINK_API_PATHS)`;
       }
       return joinedDetails;
     }
 
     const jsonText = JSON.stringify(record);
-     if (jsonText && jsonText !== "{}" && hasMeaningfulValue(record)) {
+    if (jsonText && jsonText !== "{}" && hasMeaningfulValue(record)) {
       return `${defaultStatusMessage} / RAW_JSON: ${jsonText}`;
     }
 
@@ -407,7 +389,7 @@ function extractErrorDetail(status: number, data: unknown, fallbackText: string)
       status === 400 &&
       /(^|[\s:/-])bad request($|[\s:/-])/i.test(normalizedFallback);
     if (isGenericBadRequest) {
-      return `${normalizedFallback} / リクエスト内容を確認してください (fax_number・quality・uploaded_card_url・mapping_columns・NEXLINK_API_PATH)`;
+      return `${normalizedFallback} / リクエスト内容を確認してください (recipient list CSV・fax_quality・mapping_columns・NEXLINK_API_PATHS)`;
     }
     return normalizedFallback;
   }
@@ -428,7 +410,7 @@ function isBadRequestRetryableAsMultipart(data: unknown, rawText: string) {
   const combined = `${JSON.stringify(data ?? "")} ${rawText}`.toLowerCase();
   return (
     /bad request/.test(combined) &&
-    /(fax_number|quality|uploaded_card_url|mapping_columns|request body|request parameter)/.test(
+    /(fax_number|fax_quality|quality|mapping_columns|request body|request parameter|recipient.*file|file)/.test(
       combined,
     )
   );
@@ -449,7 +431,7 @@ function parseRetryAfterMs(retryAfterHeader: string | null) {
 
 function computeRetryDelayMs(attempt: number, retryAfterHeader: string | null) {
   const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
-   if (retryAfterMs > 0) return Math.min(retryAfterMs, 120_000);
+  if (retryAfterMs > 0) return Math.min(retryAfterMs, 120_000);
 
   const baseDelay = 500;
   const jitter = Math.floor(Math.random() * 250);
@@ -499,14 +481,11 @@ async function fetchJsonWithRetry(
     } catch {
       data = rawText || null;
     }
-  const retryAfterHeader = response.headers.get("retry-after");
+    const retryAfterHeader = response.headers.get("retry-after");
     const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
     retryAfterSeconds = retryAfterMs > 0 ? Math.ceil(retryAfterMs / 1000) : null;
 
-    if (
-      response.status === 429 &&
-      isRateLimitExceededError(data)
-    ) {
+    if (response.status === 429 && isRateLimitExceededError(data)) {
       return {
         ok: response.ok,
         status: response.status,
@@ -529,7 +508,7 @@ async function fetchJsonWithRetry(
       status: response.status,
       data,
       rawText,
-     retryAfterSeconds,
+      retryAfterSeconds,
     };
   }
 
@@ -544,14 +523,37 @@ async function fetchJsonWithRetry(
   };
 }
 
+function getConfiguredApiPaths() {
+  const configuredList = readEnv("NEXLINK_API_PATHS", "NEXILINK_API_PATHS");
+  const splitPaths = configuredList
+    ? configuredList
+        .split(/[,\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+  const keyedPaths = [
+    readEnv("NEXLINK_API_PATH_DIRECT_SEND", "NEXILINK_API_PATH_DIRECT_SEND"),
+    readEnv(
+      "NEXLINK_API_PATH_FACSIMILE_DIRECT_SEND",
+      "NEXILINK_API_PATH_FACSIMILE_DIRECT_SEND",
+    ),
+    readEnv(
+      "NEXLINK_API_PATH_FACSIMILES_DIRECT_SEND",
+      "NEXILINK_API_PATH_FACSIMILES_DIRECT_SEND",
+    ),
+    readEnv("NEXLINK_API_PATH", "NEXILINK_API_PATH"),
+  ].filter(Boolean);
+
+  const merged = [...splitPaths, ...keyedPaths];
+  return merged.length > 0 ? merged : [DEFAULT_API_PATH];
+}
 function getResolvedDirectSendUrl() {
   const endpointUrl = readEnv("NEXLINK_FAX_ENDPOINT", "NEXILINK_FAX_ENDPOINT");
   if (endpointUrl) return endpointUrl;
 
   const baseUrl =
     readEnv("NEXLINK_API_BASE_URL", "NEXILINK_API_BASE_URL") || DEFAULT_BASE_URL;
-  const apiPath =
-    readEnv("NEXLINK_API_PATH", "NEXILINK_API_PATH") || DEFAULT_API_PATH;
+  const apiPath = getConfiguredApiPaths()[0];
 
   return new URL(apiPath, baseUrl).toString();
 }
@@ -565,7 +567,8 @@ function getDirectSendUrlCandidates(primaryUrl: string) {
   }
 
   const configuredPath = parsedPrimary.pathname.replace(/\/+$/, "");
-  for (const apiPath of DIRECT_SEND_API_PATH_CANDIDATES) {
+  const configuredPaths = getConfiguredApiPaths();
+  for (const apiPath of [...configuredPaths, ...DIRECT_SEND_API_PATH_CANDIDATES]) {
     const normalizedPath = apiPath.replace(/\/+$/, "");
     if (normalizedPath === configuredPath) continue;
     const candidate = new URL(normalizedPath, parsedPrimary.origin).toString();
@@ -587,41 +590,28 @@ async function sendDirectFax(params: {
   apiToken: string;
   faxNumber: string;
   allowInternationalFax: boolean;
-  quality: number;
-  uploadedCardUrl?: string | null;
-  uploadedCardName?: string | null;
-  uploadedCardType?: string | null;
-  mappingColumns?: Record<string, unknown>;
+  faxQuality: 0 | 1;
+  mappingColumnsJson: string;
 }) {
-  const normalizedMappingColumns = JSON.parse(
-    JSON.stringify(params.mappingColumns ?? {}),
-  ) as Record<string, unknown>;
+  const normalizedMappingColumns = params.mappingColumnsJson;
+  const recipientListCsv = `FAX\n${params.faxNumber}\n`;
+  const recipientListFile = new Blob([recipientListCsv], {
+    type: "text/csv",
+  });
   const baseRequestBody = {
-    fax_number: params.faxNumber,
     allow_international_fax: params.allowInternationalFax,
-    quality: params.quality,
-    ...(params.uploadedCardUrl
-      ? { uploaded_card_url: params.uploadedCardUrl }
-      : {}),
+    fax_quality: params.faxQuality,
   };
-  
+
   console.log("NEXLINK direct_send url =", params.apiUrl);
   console.log("NEXLINK direct_send body =", {
     ...baseRequestBody,
     mapping_columns: normalizedMappingColumns,
+    recipient_list_file: "recipient-list.csv",
   });
   const maskedToken = `${params.apiToken.slice(0, 4)}***${params.apiToken.slice(-4)}`;
   console.log("NEXLINK token preview =", maskedToken);
   const aggressiveAuthFallback = shouldUseAggressiveAuthFallback();
-  const authTokenBodyCandidates = aggressiveAuthFallback
-    ? ([
-        {},
-        { token: params.apiToken },
-        { api_token: params.apiToken },
-        { base: { token: params.apiToken } },
-        { base: { api_token: params.apiToken } },
-      ] as const)
-    : ([{}] as const);
   const authHeaderCandidates = aggressiveAuthFallback
     ? buildAuthHeaderCandidates(params.apiToken)
     : [buildAuthHeader(params.apiToken)];
@@ -629,158 +619,46 @@ async function sendDirectFax(params: {
     "NEXLINK auth fallback mode =",
     aggressiveAuthFallback ? "aggressive" : "strict",
   );
-  
+
   let lastResponse: Awaited<ReturnType<typeof fetchJsonWithRetry>> | null = null;
-   const buildJsonInit = (
-    authHeader: Record<string, string>,
-    authTokenBodyCandidate: Record<string, unknown>,
-  ): RequestInit => ({
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      ...authHeader,
-    },
-     body: JSON.stringify({
-      ...baseRequestBody,
-      ...authTokenBodyCandidate,
-      mapping_columns: normalizedMappingColumns,
-    }),
-  });
   const buildMultipartInit = (authHeader: Record<string, string>): RequestInit => {
     const formData = new FormData();
-    const recipientListCsv = `FAX\n${params.faxNumber}\n`;
-    const recipientListFile = new Blob([recipientListCsv], {
-      type: "text/csv",
-    });
-
-       formData.append("file", recipientListFile, "recipient-list.csv");
-    formData.append("fax_number", params.faxNumber);
+    formData.append("file", recipientListFile, "recipient-list.csv");
     formData.append(
       "allow_international_fax",
       params.allowInternationalFax ? "1" : "0",
     );
-    formData.append("quality", String(params.quality));
+    formData.append("fax_quality", String(params.faxQuality));
     formData.append("token", params.apiToken);
-    formData.append("mapping_columns", JSON.stringify(normalizedMappingColumns));
-    Object.entries(normalizedMappingColumns).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-      formData.append(`mapping_columns[${key}]`, String(value));
-    });
-    if (params.uploadedCardUrl) {
-      formData.append("uploaded_card_url", params.uploadedCardUrl);
-    }
+    formData.append("mapping_columns", normalizedMappingColumns);
 
-        return {
+    return {
       method: "POST",
       headers: {
         Accept: "application/json",
         ...authHeader,
       },
-    body: formData,
+      body: formData,
     };
   };
   for (let index = 0; index < authHeaderCandidates.length; index += 1) {
     const authHeader = authHeaderCandidates[index];
     const authHeaderKeys = Object.keys(authHeader).join(",");
-    for (const authTokenBodyCandidate of authTokenBodyCandidates) {
-      const response = await fetchJsonWithRetry(
-        params.apiUrl,
-        buildJsonInit(authHeader, authTokenBodyCandidate as Record<string, unknown>),
-      );
-      lastResponse = response;
-      const responseText = `${JSON.stringify(response.data ?? "")} ${response.rawText}`;
-      const isMappingColumnsValidationError =
-        response.status === 422 &&
-        /0130001|mapping_columns/i.test(responseText);
-      const isRecipientListFileValidationError =
-        response.status === 422 &&
-        /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
-          responseText,
-        );
-      const isBadRequestMultipartFallbackCandidate =
-        response.status === 400 &&
-        isBadRequestRetryableAsMultipart(response.data, response.rawText);
-      if (response.status === 429) {
-        return response;
-      }
-      if (isMappingColumnsValidationError) {
-        console.log(
-          `NEXLINK mapping_columns retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart mapping_columns payload`,
-        );
-        const multipartResponse = await fetchJsonWithRetry(
-          params.apiUrl,
-          buildMultipartInit(authHeader),
-        );
-        lastResponse = multipartResponse;
-        if (multipartResponse.status === 429) {
-          return multipartResponse;
-        }
-        if (
-          !isAuthRetryableError(
-            multipartResponse.status,
-            multipartResponse.data,
-            multipartResponse.rawText,
-          )
-        ) {
-          return multipartResponse;
-        }
-        continue;
-      }
-      if (isRecipientListFileValidationError) {
-        console.log(
-          `NEXLINK recipient-list retry: HTTP 422 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart file payload`,
-        );
-        const multipartResponse = await fetchJsonWithRetry(
-          params.apiUrl,
-          buildMultipartInit(authHeader),
-        );
-        lastResponse = multipartResponse;
-        if (multipartResponse.status === 429) {
-          return multipartResponse;
-        }
-        if (
-          !isAuthRetryableError(
-            multipartResponse.status,
-            multipartResponse.data,
-            multipartResponse.rawText,
-          )
-        ) {
-           return multipartResponse;
-        }
-        continue;
-      }
-      if (isBadRequestMultipartFallbackCandidate) {
-        console.log(
-          `NEXLINK bad-request retry: HTTP 400 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart payload`,
-        );
-        const multipartResponse = await fetchJsonWithRetry(
-          params.apiUrl,
-          buildMultipartInit(authHeader),
-        );
-        lastResponse = multipartResponse;
-        if (multipartResponse.status === 429) {
-          return multipartResponse;
-        }
-        if (
-          !isAuthRetryableError(
-            multipartResponse.status,
-            multipartResponse.data,
-            multipartResponse.rawText,
-          )
-        ) {
-          return multipartResponse;
-        }
-        continue;
-      }
-      if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
-        return response;
-      }
-    
-      console.log(
-        `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=json_object, headers=${authHeaderKeys}, authBody=${JSON.stringify(authTokenBodyCandidate)}`,
-      );
+    const response = await fetchJsonWithRetry(
+      params.apiUrl,
+      buildMultipartInit(authHeader),
+    );
+    lastResponse = response;
+    if (response.status === 429) {
+      return response;
     }
+    if (!isAuthRetryableError(response.status, response.data, response.rawText)) {
+      return response;
+    }
+
+    console.log(
+      `NEXLINK auth/content retry: HTTP ${response.status} with candidate ${index + 1}/${authHeaderCandidates.length}, payload=multipart, headers=${authHeaderKeys}`,
+    );
   }
 
   if (!lastResponse) {
@@ -794,9 +672,7 @@ function parseRequestMethodOverride(payload: RequestPayload) {
   return method.trim().toUpperCase() || "POST";
 }
 function resolveMappingColumns(payload: RequestPayload) {
-  const raw =
-    payload.mappingColumns ??
-    payload.mapping_columns;
+  const raw = payload.mappingColumns ?? payload.mapping_columns;
 
   if (!raw) return {};
 
@@ -819,9 +695,7 @@ function resolveMappingColumns(payload: RequestPayload) {
   return {};
 }
 
-function ensureRecipientMappingColumns(
-  mappingColumns: Record<string, unknown>,
-) {
+function ensureRecipientMappingColumns(mappingColumns: Record<string, unknown>) {
   const normalized = { ...mappingColumns };
   const stringValues = Object.values(normalized)
     .filter((value): value is string => typeof value === "string")
@@ -837,6 +711,18 @@ function ensureRecipientMappingColumns(
   return normalized;
 }
 
+function resolveMappingColumnsJson(payload: RequestPayload) {
+  const normalized = ensureRecipientMappingColumns(resolveMappingColumns(payload));
+  return JSON.stringify(normalized);
+}
+
+function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
+  const rawFaxQuality = payload.fax_quality ?? payload.faxQuality;
+  if (rawFaxQuality === 0 || rawFaxQuality === 1) return rawFaxQuality;
+  if (rawFaxQuality === "0") return 0;
+  if (rawFaxQuality === "1") return 1;
+  return DEFAULT_FAX_QUALITY;
+}
 
 export async function POST(request: Request) {
   const apiUrl = getResolvedDirectSendUrl();
@@ -859,10 +745,7 @@ export async function POST(request: Request) {
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "リクエスト形式が不正です。" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "リクエスト形式が不正です。" }, { status: 400 });
   }
   const requestMethod = parseRequestMethodOverride(payload);
   if (requestMethod !== "POST") {
@@ -885,10 +768,7 @@ export async function POST(request: Request) {
     .filter((item) => faxPattern.test(item.normalized));
 
   if (validFaxTargets.length === 0) {
-    return NextResponse.json(
-      { error: "有効なFAX番号がありません。" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "有効なFAX番号がありません。" }, { status: 400 });
   }
 
   const allowInternationalFax =
@@ -896,24 +776,8 @@ export async function POST(request: Request) {
       ? payload.allowInternationalFax
       : false;
 
-  const quality =
-    typeof payload.quality === "number" &&
-    Number.isInteger(payload.quality) &&
-    payload.quality >= 1
-      ? payload.quality
-     : DEFAULT_FAX_QUALITY;
-  const uploadedCardUrl = normalizeUploadedCardUrl(payload.uploadedCardUrl);
-  const uploadedCardName =
-    typeof payload.uploadedCardName === "string" && payload.uploadedCardName.trim()
-      ? payload.uploadedCardName.trim()
-      : null;
-  const uploadedCardType =
-    typeof payload.uploadedCardType === "string" && payload.uploadedCardType.trim()
-      ? payload.uploadedCardType.trim()
-      : null;
-  const mappingColumns = ensureRecipientMappingColumns(
-    resolveMappingColumns(payload),
-  );
+  const faxQuality = resolveFaxQuality(payload);
+  const mappingColumnsJson = resolveMappingColumnsJson(payload);
   try {
     const results: SendResult[] = [];
 
@@ -926,11 +790,8 @@ export async function POST(request: Request) {
           apiToken,
           faxNumber: target.normalized,
           allowInternationalFax,
-          quality,
-          uploadedCardUrl,
-          uploadedCardName,
-          uploadedCardType,
-          mappingColumns,
+          faxQuality,
+          mappingColumnsJson,
         });
         response = candidateResponse;
         selectedEndpoint = candidateApiUrl;
@@ -977,10 +838,10 @@ export async function POST(request: Request) {
             endpoint: selectedEndpoint,
             endpointCandidatesTried: apiUrlCandidates,
             requestBody: {
-              fax_number: target.normalized,
+              recipient_list_csv: `FAX\n${target.normalized}\n`,
               allow_international_fax: allowInternationalFax,
-              quality,
-              mapping_columns: mappingColumns,
+              fax_quality: faxQuality,
+              mapping_columns: mappingColumnsJson,
             },
           },
         });
