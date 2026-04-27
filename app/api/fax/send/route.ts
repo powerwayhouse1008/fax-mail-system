@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
 const DEFAULT_FAX_QUALITY = 1;
+const DEFAULT_MAPPING_COLUMNS: Record<string, number> = { fax: 0 };
+const DISALLOWED_MAPPING_COLUMN_KEYS = new Set(["use_print_header"]);
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 5;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
@@ -336,27 +338,35 @@ function normalizeMappingColumns(
 }
 function resolveMappingColumns(payload: RequestPayload): Record<string, unknown> {
   const rawMappingColumns = payload.mapping_columns ?? payload.mappingColumns;
+ const sanitizeMappingColumns = (mappingColumns: Record<string, number>) => {
+    const sanitized = Object.fromEntries(
+      Object.entries(mappingColumns).filter(
+        ([key]) => !DISALLOWED_MAPPING_COLUMN_KEYS.has(key),
+      ),
+    );
 
+    return Object.keys(sanitized).length > 0 ? sanitized : { ...DEFAULT_MAPPING_COLUMNS };
+  };
   if (!rawMappingColumns) {
-     return { fax: 0 };
+     return { ...DEFAULT_MAPPING_COLUMNS };
   }
 
- const normalizedObject = normalizeMappingColumns(rawMappingColumns);
+  const normalizedObject = normalizeMappingColumns(rawMappingColumns);
   if (normalizedObject) {
-    return normalizedObject;
+    return sanitizeMappingColumns(normalizedObject);
   }
 
   if (typeof rawMappingColumns === "string") {
     try {
       const parsed = JSON.parse(rawMappingColumns);
      const normalizedParsed = normalizeMappingColumns(parsed);
-      if (normalizedParsed) return normalizedParsed;
+      if (normalizedParsed) return sanitizeMappingColumns(normalizedParsed);
     } catch {
       // fallback to default mapping below
     }
   }
 
-  return { fax: 0 };
+  return { ...DEFAULT_MAPPING_COLUMNS };
 }
 
 function getObjectValue<T = unknown>(data: unknown, key: string): T | null {
