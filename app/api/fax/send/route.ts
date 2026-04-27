@@ -402,6 +402,16 @@ function isAuthRetryableError(status: number, data: unknown, rawText: string) {
     combined,
   );
 }
+function isBadRequestRetryableAsMultipart(data: unknown, rawText: string) {
+  const combined = `${JSON.stringify(data ?? "")} ${rawText}`.toLowerCase();
+  return (
+    /bad request/.test(combined) &&
+    /(fax_number|quality|uploaded_card_url|mapping_columns|request body|request parameter)/.test(
+      combined,
+    )
+  );
+}
+
 function parseRetryAfterMs(retryAfterHeader: string | null) {
   if (!retryAfterHeader) return 0;
 
@@ -646,6 +656,9 @@ async function sendDirectFax(params: {
         /0020001|宛先リストファイル|recipient.*file|(^|[^a-z])file([^a-z]|$)/i.test(
           responseText,
         );
+      const isBadRequestMultipartFallbackCandidate =
+        response.status === 400 &&
+        isBadRequestRetryableAsMultipart(response.data, response.rawText);
       if (response.status === 429) {
         return response;
       }
@@ -692,6 +705,29 @@ async function sendDirectFax(params: {
           )
         ) {
            return multipartResponse;
+        }
+        continue;
+      }
+      if (isBadRequestMultipartFallbackCandidate) {
+        console.log(
+          `NEXLINK bad-request retry: HTTP 400 with candidate ${index + 1}/${authHeaderCandidates.length}, trying multipart payload`,
+        );
+        const multipartResponse = await fetchJsonWithRetry(
+          params.apiUrl,
+          buildMultipartInit(authHeader),
+        );
+        lastResponse = multipartResponse;
+        if (multipartResponse.status === 429) {
+          return multipartResponse;
+        }
+        if (
+          !isAuthRetryableError(
+            multipartResponse.status,
+            multipartResponse.data,
+            multipartResponse.rawText,
+          )
+        ) {
+          return multipartResponse;
         }
         continue;
       }
