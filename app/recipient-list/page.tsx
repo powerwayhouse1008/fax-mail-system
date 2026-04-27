@@ -222,9 +222,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
                 html: mailBodyHtml,
                 text: mailBodyText,
                 attachments,
-                uploadedCardUrl: uploadedCard?.url,
-                uploadedCardName: uploadedCard?.name,
-                uploadedCardType: uploadedCard?.type,
+                fax_quality: 1,
+                mapping_columns: JSON.stringify({ recipient: "FAX" }),
               }),
             })
           : Promise.resolve(null),
