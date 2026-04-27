@@ -608,7 +608,7 @@ async function sendDirectFax(params: {
       mappingMode: "none",
       buildInit: (authHeader) => {
         const formData = new FormData();
-        const recipientListCsv = `fax_number\n${params.faxNumber}\n`;
+        const recipientListCsv = `FAX\n${params.faxNumber}\n`;
         const recipientListFile = new Blob([recipientListCsv], {
           type: "text/csv",
         });
@@ -738,7 +738,19 @@ function resolveMappingColumns(payload: RequestPayload) {
 function ensureRecipientMappingColumns(
   mappingColumns: Record<string, unknown>,
 ) {
-   return mappingColumns;
+  const normalized = { ...mappingColumns };
+  const stringValues = Object.values(normalized)
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim().toUpperCase())
+    .filter(Boolean);
+  const hasFaxOrEmailColumn =
+    stringValues.includes("FAX") || stringValues.includes("EMAIL");
+
+  if (!hasFaxOrEmailColumn) {
+    normalized.recipient = "FAX";
+  }
+
+  return normalized;
 }
 
 
