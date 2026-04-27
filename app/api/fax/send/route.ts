@@ -604,6 +604,10 @@ async function sendDirectFax(params: {
         );
         formData.append("quality", String(params.quality));
         formData.append("token", params.apiToken);
+        formData.append(
+          "mapping_columns",
+          JSON.stringify(normalizedMappingColumns),
+        );
         if (params.uploadedCardUrl) {
           formData.append("uploaded_card_url", params.uploadedCardUrl);
         }
