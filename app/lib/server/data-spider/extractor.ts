@@ -25,17 +25,26 @@ const uniq = (values: string[]) => [...new Set(values.filter(Boolean))];
 
 export async function extractFromUrl(sourceUrl: string) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12_000);
+  const timeoutMs = 12_000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(sourceUrl, {
       headers: {
-        "User-Agent": "FaxMailSystem-DataSpider/1.0",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
       },
       signal: controller.signal,
     });
 
     if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error(
+          "対象URLへのアクセスが拒否されました（HTTP 403）。対象サイトが自動取得を制限している可能性があります。ブラウザで開けるURLか、ログインが必要なページでないかをご確認ください。",
+        );
+      }
       throw new Error(`対象URLの取得に失敗しました (HTTP ${response.status})`);
     }
 
