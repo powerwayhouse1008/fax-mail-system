@@ -766,7 +766,6 @@ async function createFacsimile(
   contactListId: number | string,
   allowInternationalFax: boolean,
   faxQuality: 0 | 1,
-  usePrintHeader: 0 | 1,
   printHeaders: string[],
 ) {
   const url = buildUrl(baseUrl, API_PATH_FACSIMILES);
@@ -783,7 +782,6 @@ async function createFacsimile(
       allow_international_fax: allowInternationalFax,
       fax_quality: faxQuality,
       print_headers: printHeaders,
-      ...(usePrintHeader ? { use_print_header: usePrintHeader } : {}),
     }),
   }));
 
@@ -955,7 +953,6 @@ export async function POST(request: Request) {
           contactList.contactListId,
           allowInternationalFax,
           faxQuality,
-          usePrintHeader,
           printHeaders,
         );
         const content = await uploadFacsimileContent(
