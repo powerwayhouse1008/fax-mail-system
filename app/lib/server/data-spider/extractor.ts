@@ -12,7 +12,7 @@ export type ExtractResult = {
   links: string[];
   extracted_at: string;
 };
-
+type ExtractOptions = { source: string; title?: string; links?: string[] };
 const uniq = (values: string[]) => [...new Set(values.filter(Boolean))];
 const isLikelyLoginUrl = (url: string) => /(login|signin|auth|account\/login)/i.test(url);
 
@@ -31,7 +31,7 @@ const stripTags = (html: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-export function extractFromText(textInput: string, options: { source: string; title?: string; links?: string[] }) {
+const buildExtracted = (textInput: string, options: ExtractOptions) => {
   const text = textInput.replace(/\s+/g, " ").trim();
   const title = options.title?.trim() ?? "";
   const links = uniq((options.links ?? []).filter((href) => /^https?:\/\//i.test(href))).slice(0, 20);
@@ -75,6 +75,41 @@ export function extractFromText(textInput: string, options: { source: string; ti
     links,
     extracted_at: new Date().toISOString(),
   } as ExtractResult;
+  };
+
+const hasContactValue = (item: ExtractResult) =>
+  [item.company_name, item.phone, item.fax, item.email, item.address].some((value) => value.trim().length > 0);
+
+export function extractFromText(textInput: string, options: ExtractOptions) {
+  return buildExtracted(textInput, options);
+}
+
+export function extractManyFromTextRows(textInput: string, options: ExtractOptions) {
+  const rows = textInput
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter((row) => row.length > 0);
+
+  const results: ExtractResult[] = [];
+  const seen = new Set<string>();
+
+  rows.forEach((row, index) => {
+    const extracted = buildExtracted(row, options);
+    if (!hasContactValue(extracted)) return;
+
+    const signature = [extracted.company_name, extracted.phone, extracted.fax, extracted.email].join("|");
+    if (!signature.replace(/\|/g, "").trim()) return;
+    if (seen.has(signature)) return;
+    seen.add(signature);
+    extracted.memo = [extracted.memo, `row: ${index + 1}`].filter(Boolean).join(" / ");
+    results.push(extracted);
+  });
+
+  if (results.length > 0) {
+    return results;
+  }
+
+  return [buildExtracted(textInput, options)];
 }
 export async function extractFromUrl(sourceUrl: string) {
   const controller = new AbortController();
@@ -122,11 +157,41 @@ export async function extractFromUrl(sourceUrl: string) {
         .filter((href) => /^https?:\/\//i.test(href)),
     );
 
-    return extractFromText(stripTags(html), {
+  const baseUrl = new URL(sourceUrl);
+    const candidateLinks = uniq(
+      Array.from(html.matchAll(/<a[^>]+href=["']([^"']+)["']/gi))
+        .map((m) => m[1])
+        .map((href) => {
+          try {
+            return new URL(href, baseUrl).toString();
+          } catch {
+            return "";
+          }
+        })
+        .filter((href) => href.startsWith(`${baseUrl.protocol}//${baseUrl.host}`)),
+    ).slice(0, 6);
+
+    const pages: string[] = [stripTags(html)];
+    for (const link of candidateLinks) {
+      try {
+        const pageResponse = await fetch(link, {
+          headers: { Accept: "text/html,application/xhtml+xml" },
+          signal: controller.signal,
+        });
+        if (!pageResponse.ok) continue;
+        pages.push(stripTags(await pageResponse.text()));
+      } catch {
+        continue;
+      }
+    }
+
+    const extractedList = extractManyFromTextRows(pages.join("\n"), {
       source: sourceUrl,
       title,
       links,
       });
+
+    return extractedList;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
      throw new Error(
