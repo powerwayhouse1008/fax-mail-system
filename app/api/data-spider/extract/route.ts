@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       }
 
    const extracted = await extractFromUrl(parsedUrl.toString());
-      return NextResponse.json({ data: extracted });
+      return NextResponse.json({ data: extracted[0], items: extracted, total: extracted.length });
     }
 
   const form = await request.formData();
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     }
 
     const extracted = await extractFromFile(fileEntry as File);
-    return NextResponse.json({ data: extracted });
+    return NextResponse.json({ data: extracted[0], items: extracted, total: extracted.length });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "解析中にエラーが発生しました。" },
