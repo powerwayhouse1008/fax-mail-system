@@ -24,6 +24,8 @@ type RequestPayload = {
   usePrintHeader?: unknown;
   use_print_header?: unknown;
   subject?: unknown;
+  printHeaders?: unknown;
+  print_headers?: unknown;
   text?: unknown;
   html?: unknown;
   message?: unknown;
@@ -318,6 +320,35 @@ function resolveUsePrintHeader(payload: RequestPayload): 0 | 1 {
     return 1;
   }
   return 0;
+}
+
+function resolvePrintHeaders(payload: RequestPayload): string[] {
+  const rawPrintHeaders = payload.print_headers ?? payload.printHeaders;
+
+  if (Array.isArray(rawPrintHeaders)) {
+    return rawPrintHeaders
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof rawPrintHeaders === "string") {
+    const trimmed = rawPrintHeaders.trim();
+    if (!trimmed) return [];
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return [trimmed];
+    }
+  }
+
+  return [];
 }
 
 function normalizeMappingColumns(
@@ -736,6 +767,7 @@ async function createFacsimile(
   allowInternationalFax: boolean,
   faxQuality: 0 | 1,
   usePrintHeader: 0 | 1,
+  printHeaders: string[],
 ) {
   const url = buildUrl(baseUrl, API_PATH_FACSIMILES);
 
@@ -750,7 +782,8 @@ async function createFacsimile(
       contact_list_id: contactListId,
       allow_international_fax: allowInternationalFax,
       fax_quality: faxQuality,
-      use_print_header: usePrintHeader,
+      print_headers: printHeaders,
+      ...(usePrintHeader ? { use_print_header: usePrintHeader } : {}),
     }),
   }));
 
@@ -897,6 +930,11 @@ export async function POST(request: Request) {
       : false;
   const faxQuality = resolveFaxQuality(payload);
   const usePrintHeader = resolveUsePrintHeader(payload);
+  const resolvedPrintHeaders = resolvePrintHeaders(payload);
+  const printHeaders =
+    usePrintHeader === 1 && resolvedPrintHeaders.length === 0
+      ? ["FAX"]
+      : resolvedPrintHeaders;
   const mappingColumns = resolveMappingColumns(payload);
   const baseUrl = getBaseUrl();
 
@@ -918,6 +956,7 @@ export async function POST(request: Request) {
           allowInternationalFax,
           faxQuality,
           usePrintHeader,
+          printHeaders,
         );
         const content = await uploadFacsimileContent(
           baseUrl,
