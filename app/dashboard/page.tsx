@@ -61,6 +61,12 @@ export default function DashboardPage() {
               href: "/admin",
               cta: "Adminホームへ",
             },
+           {
+              title: "データ収集",
+              description: "Powerway Data Spider でURL解析と連絡先収集を行います。",
+              href: "/admin/data-spider",
+              cta: "データ収集を開く",
+            },
           ]
         : actions,
      [session?.role],
