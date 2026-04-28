@@ -22,7 +22,15 @@ const stripTags = (html: string) =>
     .trim();
 
 const uniq = (values: string[]) => [...new Set(values.filter(Boolean))];
+const isLikelyLoginUrl = (url: string) => /(login|signin|auth|account\/login)/i.test(url);
 
+const isLikelyLoginPage = (html: string) => {
+  const normalized = html.toLowerCase();
+  const hasPasswordField = /<input[^>]+type=["']password["']/i.test(normalized);
+  const hasLoginKeyword =
+    /(ログイン|サインイン|login|sign in|メールアドレス|password|パスワード)/i.test(normalized);
+  return hasPasswordField && hasLoginKeyword;
+};
 export async function extractFromUrl(sourceUrl: string) {
   const controller = new AbortController();
   const timeoutMs = 12_000;
@@ -40,6 +48,11 @@ export async function extractFromUrl(sourceUrl: string) {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error(
+          "対象URLは認証が必要です（HTTP 401）。公開ページのURLをご指定いただくか、ログイン不要なページをご利用ください。",
+        );
+      }
       if (response.status === 403) {
         throw new Error(
           "対象URLへのアクセスが拒否されました（HTTP 403）。対象サイトが自動取得を制限している可能性があります。ブラウザで開けるURLか、ログインが必要なページでないかをご確認ください。",
@@ -49,6 +62,11 @@ export async function extractFromUrl(sourceUrl: string) {
     }
 
     const html = await response.text();
+     if ((response.redirected && isLikelyLoginUrl(response.url)) || isLikelyLoginPage(html)) {
+      throw new Error(
+        "対象URLはログインが必要なページの可能性があります。公開ページのURLをご指定いただくか、ログイン不要なページをご利用ください。",
+      );
+    }
     const text = stripTags(html);
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     const title = titleMatch?.[1]?.replace(/\s+/g, " ").trim() ?? "";
@@ -104,7 +122,9 @@ export async function extractFromUrl(sourceUrl: string) {
     } as ExtractResult;
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-      throw new Error("タイムアウトしました。しばらくしてから再試行してください。");
+    throw new Error(
+        `対象URLの取得がタイムアウトしました（${timeoutMs / 1000}秒）。しばらくしてから再試行してください。`,
+      );
     }
     throw error;
   } finally {
