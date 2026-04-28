@@ -33,7 +33,9 @@ type ExtractedData = {
 };
 
 export default function DataSpiderPage() {
+  const [extractMode, setExtractMode] = useState<"url" | "file">("url");
   const [url, setUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<ExtractedData | null>(null);
   const [contacts, setContacts] = useState<SpiderContact[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -53,19 +55,33 @@ export default function DataSpiderPage() {
   };
 
   const handleExtract = async () => {
-    if (!url.trim()) {
+    if (extractMode === "url" && !url.trim()) {
       setNotice({ type: "error", text: "URL入力は必須です。" });
+      return;
+    }
+   if (extractMode === "file" && !file) {
+      setNotice({ type: "error", text: "PDF / Excel / Word ファイルを選択してください。" });
       return;
     }
 
     setIsBusy(true);
     setNotice(null);
     try {
-      const response = await fetch("/api/data-spider/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
-      });
+      const response =
+        extractMode === "url"
+          ? await fetch("/api/data-spider/extract", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: url.trim() }),
+            })
+          : await (() => {
+              const form = new FormData();
+              form.append("file", file as File);
+              return fetch("/api/data-spider/extract", {
+                method: "POST",
+                body: form,
+              });
+            })();
       const payload = (await response.json()) as { data?: ExtractedData; error?: string };
       if (!response.ok || !payload.data) {
         setNotice({ type: "error", text: payload.error ?? "解析に失敗しました。" });
@@ -210,7 +226,7 @@ export default function DataSpiderPage() {
             <div>
               <p className="badge">データ収集</p>
               <h1>Powerway Data Spider</h1>
-              <p>URL入力から1ページのみ解析し、連絡先を保存・出力できます。</p>
+              <p>URL または PDF / Excel / Word ファイルを解析し、連絡先を保存・出力できます。</p>
             </div>
             <div className="actions" style={{ marginTop: 0 }}>
               <button type="button" className="btn btn-secondary" onClick={loadContacts}>
@@ -224,9 +240,31 @@ export default function DataSpiderPage() {
 
           <div className="admin-panel" style={{ display: "grid", gap: "0.8rem" }}>
             <label className="field">
-              <span>URL入力</span>
-              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" />
+              <span>抽出元</span>
+              <select
+                value={extractMode}
+                onChange={(e) => setExtractMode(e.target.value as "url" | "file")}
+                style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: "0.6rem" }}
+              >
+                <option value="url">URL</option>
+                <option value="file">File (PDF / Excel / Word)</option>
+              </select>
             </label>
+            {extractMode === "url" ? (
+              <label className="field">
+                <span>URL入力</span>
+                <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com" />
+              </label>
+            ) : (
+              <label className="field">
+                <span>ファイル選択</span>
+                <input
+                  type="file"
+                  accept=".pdf,.xls,.xlsx,.doc,.docx"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            )}
             <div className="actions" style={{ marginTop: 0 }}>
               <button type="button" className="btn btn-primary" disabled={isBusy} onClick={handleExtract}>
                 解析開始
