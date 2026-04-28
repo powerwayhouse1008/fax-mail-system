@@ -4,6 +4,7 @@ const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
 const DEFAULT_FAX_QUALITY = 1;
 const DEFAULT_MAPPING_COLUMNS: Record<string, number> = { fax: 0 };
 const DISALLOWED_MAPPING_COLUMN_KEYS = new Set(["use_print_header"]);
+const DISALLOWED_PRINT_HEADER_VALUES = new Set(["use_print_header"]);
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 5;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
@@ -312,12 +313,27 @@ function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
 
 function resolvePrintHeaders(payload: RequestPayload): string[] {
   const rawPrintHeaders = payload.print_headers ?? payload.printHeaders;
+  const normalizePrintHeaderValue = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
 
+    const canonical = trimmed
+      .toLowerCase()
+      .replace(/\s+/g, "_");
+
+    if (DISALLOWED_PRINT_HEADER_VALUES.has(canonical)) return "";
+    return trimmed;
+  };
+  
   if (Array.isArray(rawPrintHeaders)) {
-    return rawPrintHeaders
+   return Array.from(
+      new Set(
+        rawPrintHeaders
       .filter((item): item is string => typeof item === "string")
-      .map((item) => item.trim())
-      .filter(Boolean);
+      .map((item) => normalizePrintHeaderValue(item))
+          .filter(Boolean),
+      ),
+    );
   }
 
   if (typeof rawPrintHeaders === "string") {
@@ -326,13 +342,18 @@ function resolvePrintHeaders(payload: RequestPayload): string[] {
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
-        return parsed
+        return Array.from(
+          new Set(
+            parsed
           .filter((item): item is string => typeof item === "string")
-          .map((item) => item.trim())
-          .filter(Boolean);
+          .map((item) => normalizePrintHeaderValue(item))
+              .filter(Boolean),
+          ),
+        );
       }
     } catch {
-      return [trimmed];
+      const normalizedValue = normalizePrintHeaderValue(trimmed);
+      return normalizedValue ? [normalizedValue] : [];
     }
   }
 
