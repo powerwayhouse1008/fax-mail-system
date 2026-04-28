@@ -37,6 +37,7 @@ export default function DataSpiderPage() {
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<ExtractedData | null>(null);
+  const [draftItems, setDraftItems] = useState<ExtractedData[]>([]);
   const [contacts, setContacts] = useState<SpiderContact[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -66,6 +67,7 @@ export default function DataSpiderPage() {
 
     setIsBusy(true);
     setNotice(null);
+    setDraftItems([]);
     try {
       const response =
         extractMode === "url"
@@ -82,20 +84,28 @@ export default function DataSpiderPage() {
                 body: form,
               });
             })();
-      const payload = (await response.json()) as { data?: ExtractedData; error?: string };
+       const payload = (await response.json()) as {
+        data?: ExtractedData;
+        items?: ExtractedData[];
+        total?: number;
+        error?: string;
+      };
       if (!response.ok || !payload.data) {
         setNotice({ type: "error", text: payload.error ?? "解析に失敗しました。" });
         return;
       }
       setDraft(payload.data);
-      setNotice({ type: "success", text: "解析完了。保存ボタンで連絡先を登録できます。" });
+       setDraftItems(payload.items ?? [payload.data]);
+      const total = payload.total ?? payload.items?.length ?? 1;
+      setNotice({ type: "success", text: `解析完了（${total}件）。保存ボタンで連絡先を登録できます。` });
     } finally {
       setIsBusy(false);
     }
   };
 
   const handleSave = async () => {
-    if (!draft) {
+     const saveItems = draftItems.length > 0 ? draftItems : draft ? [draft] : [];
+    if (saveItems.length === 0) {
       setNotice({ type: "error", text: "保存する解析結果がありません。" });
       return;
     }
@@ -103,7 +113,7 @@ export default function DataSpiderPage() {
     const response = await fetch("/api/data-spider/contacts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contacts: [draft] }),
+      body: JSON.stringify({ contacts: saveItems }),
     });
     const payload = (await response.json()) as { error?: string };
     if (!response.ok) {
@@ -282,6 +292,7 @@ export default function DataSpiderPage() {
             {draft ? (
               <div className="recipient-preview">
                 <h2>取得結果</h2>
+                <p>抽出件数: {draftItems.length || 1}</p>
                 <p>会社名: {draft.company_name || "-"}</p>
                 <p>電話番号: {draft.phone || "-"} / FAX番号: {draft.fax || "-"}</p>
                 <p>メールアドレス: {draft.email || "-"}</p>
