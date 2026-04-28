@@ -3,12 +3,24 @@ import { tmpdir } from "os";
 import { extname, join } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { extractFromText } from "./extractor";
+import { extractManyFromTextRows } from "./extractor";
 
 const execFileAsync = promisify(execFile);
 
 const normalizeText = (input: string) =>
   input
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\u0000/g, " ")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+ const normalizeOneLine = (input: string) =>
+  input
+    .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .replace(/\u0000/g, " ")
     .replace(/\s+/g, " ")
@@ -29,7 +41,11 @@ const stripXml = (xml: string) =>
     .replace(/<w:tab\/?\s*>/g, "\t")
     .replace(/<w:br\/?\s*>/g, "\n")
     .replace(/<[^>]+>/g, " ")
+    .replace(/<\/w:p>/g, "\n")
+    .replace(/<\/row>/gi, "\n")
     .replace(/\s+/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n+/g, "\n")
     .trim();
 
 const readTextByStrings = async (filePath: string) => {
@@ -97,7 +113,7 @@ const readTextFromFile = async (filePath: string, ext: string, buffer: Buffer) =
   const stringsText = await readTextByStrings(filePath);
   if (stringsText) return stringsText;
 
-  return normalizeText(buffer.toString("utf8"));
+ return normalizeOneLine(buffer.toString("utf8"));
 };
 
 const isSupported = (name: string) => /\.(pdf|xls|xlsx|doc|docx)$/i.test(name);
@@ -111,16 +127,15 @@ export async function extractFromFile(file: File) {
   const workDir = await mkdtemp(join(tmpdir(), "spider-file-"));
   const filePath = join(workDir, file.name.replace(/[^a-zA-Z0-9._-]/g, "-"));
 
-
   try {
     await writeFile(filePath, buffer);
     const content = await readTextFromFile(filePath, extname(file.name).toLowerCase(), buffer);
 
-   if (!content.trim()) {
-     throw new Error("Không đọc được nội dung từ file đã chọn.");
-   }
+    if (!content.trim()) {
+      throw new Error("Không đọc được nội dung từ file đã chọn.");
+    }
 
-  return extractFromText(content, {
+   return extractManyFromTextRows(content, {
       source: `file://${file.name}`,
       title: file.name,
       links: [],
