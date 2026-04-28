@@ -8,6 +8,8 @@ import { appendSendHistory } from "../send-history/history-store";
 type RecipientListPageProps = {
   searchParams?: {
     channel?: string;
+    faxList?: string;
+    gmailList?: string;
   };
 };
 
@@ -73,7 +75,14 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [sendMessage, setSendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  
+  useEffect(() => {
+    if (typeof searchParams?.faxList === "string" && searchParams.faxList.trim()) {
+      setFaxListInput(searchParams.faxList);
+    }
+    if (typeof searchParams?.gmailList === "string" && searchParams.gmailList.trim()) {
+      setGmailListInput(searchParams.gmailList);
+    }
+  }, [searchParams?.faxList, searchParams?.gmailList]);
   const faxNumbers = useMemo(() => cleanList(faxListInput), [faxListInput]);
   const gmailAddresses = useMemo(() => cleanList(gmailListInput), [gmailListInput]);
   const ccAddresses = useMemo(() => cleanList(ccListInput), [ccListInput]);
