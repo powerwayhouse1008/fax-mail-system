@@ -56,9 +56,12 @@ const toAbsoluteAthomeUrl = (href: string) => {
 const isAthomeListUrl = (url: string) => /^https:\/\/www\.athome\.co\.jp\/estate\/.+\/list\//i.test(url);
 
 const extractAthomeField = (text: string, labels: string[]) => {
+  const stopWords = "TEL|FAX|電話番号|住所|所在地|営業時間|定休日|交通|取扱い|加盟団体|免許番号|ホームページ";
   for (const label of labels) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const matched = text.match(new RegExp(`${escaped}\\s*[：:]?\\s*([^\n]+)`, "i"));
+     const matched = text.match(
+      new RegExp(`${escaped}\\s*[：:]?\\s*(.{1,120}?)(?=\\s*(?:${stopWords})\\s*[：:]|$)`, "i"),
+    );
     if (matched?.[1]) return textOrEmpty(matched[1]);
   }
   return "";
@@ -67,7 +70,7 @@ const extractAthomeField = (text: string, labels: string[]) => {
 const buildExtractedFromAthome = (item: AthomeCompany): ExtractResult => ({
   company_name: item.companyName,
   person_name: "",
-  address: item.address,
+  address: "",
   phone: item.tel,
   fax: item.fax,
   email: "",
@@ -250,10 +253,10 @@ const buildExtracted = (textInput: string, options: ExtractOptions) => {
   );
 
   const faxLine = text.match(/FAX[:：\s]*([\d\-+()\s]{6,30})/i)?.[1]?.trim() ?? "";
-  const fax = faxLine || phoneCandidates.find((item) => /fax/i.test(item)) || "";
+   const fax = faxLine || "";
 
   const address =
-    text.match(/〒?\d{3}-?\d{4}[\s\S]{0,60}?(都|道|府|県)[\s\S]{0,80}?(市|区|町|村)/)?.[0]?.trim() ?? "";
+    const address = "";
 
   const companyName =
     title || text.match(/株式会社[^\s、。]{1,40}|有限会社[^\s、。]{1,40}|合同会社[^\s、。]{1,40}/)?.[0] || "";
