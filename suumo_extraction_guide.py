@@ -63,46 +63,59 @@ def parse_float(text: str | None) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def _abs_url(href: str, base_url: str) -> str:
+    return href if href.startswith("http") else f"{base_url}{href}"
+
+
 def extract_listings(list_page_html: str, base_url: str = "https://suumo.jp") -> Iterable[PropertyRecord]:
     soup = BeautifulSoup(list_page_html, "html.parser")
 
-    # セレクタはSUUMOのDOM変更で壊れるため、必要に応じて更新してください。
+    # 建物カード。SUUMOでは1カード内に複数部屋(tr)が入るため、カード数!=物件数になる。
     card_nodes = soup.select(".cassetteitem")
 
-    for node in card_nodes:
-        title_node = node.select_one(".cassetteitem_content-title")
+    for card in card_nodes:
+        title_node = card.select_one(".cassetteitem_content-title")
         title = title_node.get_text(strip=True) if title_node else ""
 
-        detail_link_node = node.select_one("a[href*='/chukoikkodate/']") or node.select_one("a[href]")
-        detail_url = ""
-        if detail_link_node and detail_link_node.has_attr("href"):
-            href = detail_link_node["href"]
-            detail_url = href if href.startswith("http") else f"{base_url}{href}"
-
-        price_node = node.select_one(".cassetteitem_price--info")
-        fee_node = node.select_one(".cassetteitem_price--administration")
-        layout_node = node.select_one(".cassetteitem_madori")
-        area_node = node.select_one(".cassetteitem_menseki")
-        address_node = node.select_one(".cassetteitem_detail-col1")
-        station_node = node.select_one(".cassetteitem_detail-col2")
-
-        price_text = price_node.get_text(" ", strip=True) if price_node else ""
-        fee_text = fee_node.get_text(" ", strip=True) if fee_node else ""
-        layout_text = layout_node.get_text(strip=True) if layout_node else ""
-        area_text = area_node.get_text(strip=True) if area_node else ""
+        address_node = card.select_one(".cassetteitem_detail-col1")
+        station_node = card.select_one(".cassetteitem_detail-col2")
         address_text = address_node.get_text(strip=True) if address_node else ""
         station_text = station_node.get_text(" ", strip=True) if station_node else ""
 
-        yield PropertyRecord(
-            title=title,
-            price_yen=parse_int_yen(price_text),
-            management_fee_yen=parse_int_yen(fee_text),
-            layout=layout_text or None,
-            area_m2=parse_float(area_text),
-            address=address_text or None,
-            nearest_station=station_text or None,
-            detail_url=detail_url,
-        )
+        room_rows = card.select(".js-cassette_link")
+        if not room_rows:
+            room_rows = [card]
+
+        for row in room_rows:
+            detail_link_node = row.select_one("a[href*='/jj/bukken/shosai/']") or row.select_one("a[href]")
+            detail_url = ""
+            if detail_link_node and detail_link_node.has_attr("href"):
+                detail_url = _abs_url(detail_link_node["href"], base_url)
+
+            price_node = row.select_one(".cassetteitem_price--info, .ui-text--bold") or card.select_one(
+                ".cassetteitem_price--info"
+            )
+            fee_node = row.select_one(".cassetteitem_price--administration") or card.select_one(
+                ".cassetteitem_price--administration"
+            )
+            layout_node = row.select_one(".cassetteitem_madori")
+            area_node = row.select_one(".cassetteitem_menseki")
+
+            price_text = price_node.get_text(" ", strip=True) if price_node else ""
+            fee_text = fee_node.get_text(" ", strip=True) if fee_node else ""
+            layout_text = layout_node.get_text(strip=True) if layout_node else ""
+            area_text = area_node.get_text(strip=True) if area_node else ""
+
+            yield PropertyRecord(
+                title=title,
+                price_yen=parse_int_yen(price_text),
+                management_fee_yen=parse_int_yen(fee_text),
+                layout=layout_text or None,
+                area_m2=parse_float(area_text),
+                address=address_text or None,
+                nearest_station=station_text or None,
+                detail_url=detail_url,
+            )
 
 
 def export_csv(records: Iterable[PropertyRecord], csv_path: str) -> None:
