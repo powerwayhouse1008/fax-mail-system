@@ -238,7 +238,8 @@ const extractFromSuumoListingHtml = (html: string, sourceUrl: string): ExtractRe
     const rows = rowMatches.length > 0 ? rowMatches.map((row) => row[0] ?? "") : [cardHtml];
 
     for (const rowHtml of rows) {
-      const detailHref = rowHtml.match(/<a[^>]+href=["']([^"']*\/jj\/bukken\/shosai\/[^"']+)["']/i)?.[1] ?? "";
+      const detailHref =
+        rowHtml.match(/<a[^>]+href=["']([^"']*\/(?:[a-z]{1,2}\/){2}bukken\/shosai\/[^"']+)["']/i)?.[1] ?? "";
       const detailUrl = detailHref
         ? (() => {
             try {
@@ -279,7 +280,7 @@ const extractFromSuumoListingHtml = (html: string, sourceUrl: string): ExtractRe
   }
 
   const detailLinksFromWholePage = uniq(
-    Array.from(html.matchAll(/href=["']([^"']*\/jj\/bukken\/shosai\/[^"']+)["']/gi))
+    Array.from(html.matchAll(/href=["']([^"']*\/(?:[a-z]{1,2}\/){2}bukken\/shosai\/[^"']+)["']/gi))
       .map((match) => match[1] ?? "")
       .map((href) => {
         try {
