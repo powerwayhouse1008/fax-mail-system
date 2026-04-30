@@ -255,7 +255,6 @@ const buildExtracted = (textInput: string, options: ExtractOptions) => {
   const faxLine = text.match(/FAX[:：\s]*([\d\-+()\s]{6,30})/i)?.[1]?.trim() ?? "";
    const fax = faxLine || "";
 
-  const address =
     const address = "";
 
   const companyName =
