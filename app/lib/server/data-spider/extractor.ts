@@ -79,21 +79,23 @@ const buildExtractedFromAthome = (item: AthomeCompany): ExtractResult => ({
   extracted_at: new Date().toISOString(),
 });
 
-async function loadPlaywright(): Promise<{ chromium: { launch: (options: { headless: boolean }) => Promise<any> } }> {
+async function loadPlaywright(): Promise<
+  | { chromium: { launch: (options: { headless: boolean }) => Promise<any> } }
+  | null
+> {
   try {
     const importer = new Function("m", "return import(m)") as (m: string) => Promise<any>;
     const mod = await importer("playwright");
-    if (!mod?.chromium) throw new Error("missing chromium");
+    if (!mod?.chromium) return null;
     return mod;
   } catch {
-    throw new Error(
-      "AtHome抽出には Playwright が必要です。`npm install playwright` と `npx playwright install chromium` を実行してください。",
-    );
+    return null;
   }
 }
 
 async function extractFromAthomeListing(sourceUrl: string) {
   const playwright = await loadPlaywright();
+  if (!playwright) return extractFromAthomeListingWithoutPlaywright(sourceUrl);
   const browser = await playwright.chromium.launch({ headless: true });
 
   try {
@@ -164,6 +166,53 @@ async function extractFromAthomeListing(sourceUrl: string) {
   } finally {
     await browser.close();
   }
+}
+const collectAthomeDetailLinks = (html: string) => {
+  const matches = Array.from(html.matchAll(/href=["']([^"']*\/ahto\/[^"']+)["']/gi)).map((m) => m[1] ?? "");
+  return uniq(matches.map(toAbsoluteAthomeUrl)).filter((link) =>
+    /^https:\/\/www\.athome\.co\.jp\/ahto\/[^/]+\.html/i.test(link),
+  );
+};
+
+const extractAthomeDetailFromHtml = (html: string, detailUrl: string): ExtractResult => {
+  const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const allText = stripTags(html);
+  const homepageMatch = html.match(
+    /<a[^>]+href=["']([^"']+)["'][^>]*>\s*[^<]*ホームページ[^<]*<\/a>/i,
+  );
+
+  return buildExtractedFromAthome({
+    detailUrl,
+    companyName: textOrEmpty(stripTags(titleMatch?.[1] ?? "")),
+    tel: extractAthomeField(allText, ["TEL", "電話番号"]),
+    fax: extractAthomeField(allText, ["FAX"]),
+    address: extractAthomeField(allText, ["住所", "所在地"]),
+    websiteUrl: textOrEmpty(homepageMatch?.[1] ?? ""),
+  });
+};
+
+async function extractFromAthomeListingWithoutPlaywright(sourceUrl: string) {
+  const listRes = await fetch(sourceUrl, { cache: "no-store" });
+  if (!listRes.ok) throw new Error(`AtHomeページの取得に失敗しました: ${listRes.status}`);
+
+  const listHtml = await listRes.text();
+  const detailLinks = collectAthomeDetailLinks(listHtml);
+
+  const results: ExtractResult[] = [];
+
+  for (const detailUrl of detailLinks) {
+    const detailRes = await fetch(detailUrl, { cache: "no-store" });
+    if (!detailRes.ok) continue;
+
+    const detailHtml = await detailRes.text();
+    results.push(extractAthomeDetailFromHtml(detailHtml, detailUrl));
+  }
+
+  if (results.length === 0) {
+    throw new Error("AtHomeの会社リンクを取得できませんでした。リストURLをご確認ください。");
+  }
+
+  return results;
 }
 
 const buildExtracted = (textInput: string, options: ExtractOptions) => {
