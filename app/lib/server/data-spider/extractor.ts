@@ -23,7 +23,11 @@ type AthomeCompany = {
   address: string;
   websiteUrl: string;
 };
-
+const normalizePhoneLikeValue = (value: string) =>
+  value
+    .replace(/[^\d+()\-\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 const uniq = (values: string[]) => [...new Set(values.filter(Boolean))];
 const isLikelyLoginUrl = (url: string) => /(login|signin|auth|account\/login)/i.test(url);
 
@@ -70,9 +74,9 @@ const extractAthomeField = (text: string, labels: string[]) => {
 const buildExtractedFromAthome = (item: AthomeCompany): ExtractResult => ({
   company_name: item.companyName,
   person_name: "",
-  address: "",
-  phone: item.tel,
-  fax: item.fax,
+  address: item.address,
+  phone: normalizePhoneLikeValue(item.tel),
+  fax: normalizePhoneLikeValue(item.fax),
   email: "",
   website_url: item.websiteUrl,
   source_url: item.detailUrl,
@@ -138,11 +142,22 @@ async function extractFromAthomeListing(sourceUrl: string) {
           const homepageAnchor = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]")).find((a) =>
             /ホームページ/i.test(a.innerText ?? ""),
           );
-
+         const pairs = Array.from(document.querySelectorAll<HTMLElement>("dt, th")).map((labelEl) => {
+            const key = (labelEl.innerText ?? "").trim();
+            const valueEl = labelEl.nextElementSibling as HTMLElement | null;
+            const value = valueEl?.innerText?.trim() ?? "";
+            return { key, value };
+          });
+          const telFromPair = pairs.find((pair) => /^(TEL|電話番号)/i.test(pair.key))?.value ?? "";
+          const faxFromPair = pairs.find((pair) => /^FAX/i.test(pair.key))?.value ?? "";
+          const addressFromPair = pairs.find((pair) => /^(住所|所在地)/i.test(pair.key))?.value ?? "";
           return {
             companyName,
             allText,
             websiteUrl: homepageAnchor?.href ?? "",
+            telFromPair,
+            faxFromPair,
+            addressFromPair,
           };
         });
 
@@ -150,9 +165,9 @@ async function extractFromAthomeListing(sourceUrl: string) {
           buildExtractedFromAthome({
             detailUrl,
             companyName: textOrEmpty(scraped.companyName),
-            tel: extractAthomeField(scraped.allText, ["TEL", "電話番号"]),
-            fax: extractAthomeField(scraped.allText, ["FAX"]),
-            address: extractAthomeField(scraped.allText, ["住所", "所在地"]),
+             tel: textOrEmpty(scraped.telFromPair) || extractAthomeField(scraped.allText, ["TEL", "電話番号"]),
+            fax: textOrEmpty(scraped.faxFromPair) || extractAthomeField(scraped.allText, ["FAX"]),
+            address: textOrEmpty(scraped.addressFromPair) || extractAthomeField(scraped.allText, ["住所", "所在地"]),
             websiteUrl: textOrEmpty(scraped.websiteUrl),
           }),
         );
