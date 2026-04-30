@@ -192,8 +192,22 @@ const extractAthomeDetailFromHtml = (html: string, detailUrl: string): ExtractRe
 };
 
 async function extractFromAthomeListingWithoutPlaywright(sourceUrl: string) {
-  const listRes = await fetch(sourceUrl, { cache: "no-store" });
-  if (!listRes.ok) throw new Error(`AtHomeページの取得に失敗しました: ${listRes.status}`);
+   const athomeHeaders = {
+    "user-agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "accept-language": "ja,en-US;q=0.9,en;q=0.8",
+    referer: "https://www.athome.co.jp/",
+  };
+
+  const listRes = await fetch(sourceUrl, {
+    cache: "no-store",
+    headers: athomeHeaders,
+  });
+  if (!listRes.ok) {
+    throw new Error(`AtHomeページの取得に失敗しました: ${listRes.status}`);
+  }
+
 
   const listHtml = await listRes.text();
   const detailLinks = collectAthomeDetailLinks(listHtml);
@@ -201,7 +215,10 @@ async function extractFromAthomeListingWithoutPlaywright(sourceUrl: string) {
   const results: ExtractResult[] = [];
 
   for (const detailUrl of detailLinks) {
-    const detailRes = await fetch(detailUrl, { cache: "no-store" });
+    const detailRes = await fetch(detailUrl, {
+      cache: "no-store",
+      headers: athomeHeaders,
+    });
     if (!detailRes.ok) continue;
 
     const detailHtml = await detailRes.text();
