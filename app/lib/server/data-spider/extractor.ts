@@ -249,9 +249,14 @@ async function extractFromAthomeListingWithoutPlaywright(sourceUrl: string) {
 
   return results;
 }
+const toHalfWidth = (value: string) =>
+  value
+    .replace(/[！-～]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/　/g, " ");
 
 const buildExtracted = (textInput: string, options: ExtractOptions) => {
-  const text = textInput.replace(/\s+/g, " ").trim();
+  const normalizedInput = toHalfWidth(textInput);
+  const text = normalizedInput.replace(/\s+/g, " ").trim();
   const title = options.title?.trim() ?? "";
   const links = uniq((options.links ?? []).filter((href) => /^https?:\/\//i.test(href))).slice(0, 20);
 
@@ -267,8 +272,11 @@ const buildExtracted = (textInput: string, options: ExtractOptions) => {
       .filter((value) => value.replace(/\D/g, "").length >= 10),
   );
 
-  const faxLine = text.match(/FAX[:：\s]*([\d\-+()\s]{6,30})/i)?.[1]?.trim() ?? "";
-   const fax = faxLine || "";
+  const faxLine =
+    text
+      .match(/(?:FAX|ファックス|Fax番号|FAX番号|fax)\s*[:：]?\s*([\d\-+()\s]{6,30})/i)?.[1]
+      ?.trim() ?? "";
+  const fax = faxLine || "";
 
     const address = "";
 
