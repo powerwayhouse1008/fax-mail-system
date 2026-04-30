@@ -102,7 +102,9 @@ async function loadPlaywright(): Promise<
 
 async function extractFromAthomeListing(sourceUrl: string) {
   const playwright = await loadPlaywright();
-  if (!playwright) return extractFromAthomeListingWithoutPlaywright(sourceUrl);
+ if (!playwright) {
+    throw new Error("AtHome抽出にはPlaywrightが必要です。`npm i playwright` を実行してください。");
+  }
   const browser = await playwright.chromium.launch({ headless: true });
 
   try {
@@ -111,18 +113,15 @@ async function extractFromAthomeListing(sourceUrl: string) {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     });
 
-    await page.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(3000);
 
-    const detailLinks = await page.evaluate(() => {
-      const hrefs = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/ahto/"]')).map((a) =>
-        a.getAttribute("href") ?? "",
-      );
+    const normalizedDetailLinks = await page.$$eval("a", (links) => {
+      const hrefs = links
+        .map((a) => (a as HTMLAnchorElement).href)
+        .filter((href) => href.includes("/ahto/") && href.endsWith(".html"));
       return Array.from(new Set(hrefs));
     });
-
-    const normalizedDetailLinks = detailLinks
-      .map(toAbsoluteAthomeUrl)
-      .filter((link) => /^https:\/\/www\.athome\.co\.jp\/ahto\/[^/]+\.html/i.test(link));
 
     const results: ExtractResult[] = [];
 
@@ -130,7 +129,8 @@ async function extractFromAthomeListing(sourceUrl: string) {
       const detailPage = await browser.newPage();
 
       try {
-        await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+        await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+        await detailPage.waitForTimeout(2000);
         const scraped = await detailPage.evaluate(() => {
           const companyName =
             document.querySelector<HTMLElement>("h1")?.innerText?.trim() ||
@@ -173,6 +173,7 @@ async function extractFromAthomeListing(sourceUrl: string) {
         );
       } finally {
         await detailPage.close();
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
     }
 
