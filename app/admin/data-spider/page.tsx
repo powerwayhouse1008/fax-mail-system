@@ -143,7 +143,25 @@ export default function DataSpiderPage() {
     setNotice({ type: "success", text: "削除しました。" });
     await loadContacts();
   };
+const handleDeleteAll = async () => {
+    const allIds = contacts.map((item) => item.id);
+    if (allIds.length === 0) return;
 
+    const response = await fetch("/api/data-spider/contacts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: allIds }),
+    });
+    const payload = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setNotice({ type: "error", text: payload.error ?? "全削除に失敗しました。" });
+      return;
+    }
+
+    setSelectedIds([]);
+    setNotice({ type: "success", text: "すべて削除しました。" });
+    await loadContacts();
+  };
   useEffect(() => {
     loadContacts();
   }, []);
@@ -333,6 +351,9 @@ export default function DataSpiderPage() {
             <div className="actions" style={{ marginTop: 0 }}>
               <button type="button" className="btn btn-secondary" onClick={handleDeleteSelected}>
                 削除
+              </button>
+               <button type="button" className="btn btn-secondary" onClick={handleDeleteAll}>
+                全削除
               </button>
               <button type="button" className="btn btn-secondary" onClick={addToFax}>
                 FAX送信へ追加
