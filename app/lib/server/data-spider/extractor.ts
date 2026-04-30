@@ -12,7 +12,18 @@ export type ExtractResult = {
   links: string[];
   extracted_at: string;
 };
+
 type ExtractOptions = { source: string; title?: string; links?: string[] };
+
+type AthomeCompany = {
+  detailUrl: string;
+  companyName: string;
+  tel: string;
+  fax: string;
+  address: string;
+  websiteUrl: string;
+};
+
 const uniq = (values: string[]) => [...new Set(values.filter(Boolean))];
 const isLikelyLoginUrl = (url: string) => /(login|signin|auth|account\/login)/i.test(url);
 
@@ -23,6 +34,9 @@ const isLikelyLoginPage = (html: string) => {
     /(ログイン|サインイン|login|sign in|メールアドレス|password|パスワード)/i.test(normalized);
   return hasPasswordField && hasLoginKeyword;
 };
+
+const textOrEmpty = (value: string | null | undefined) => value?.replace(/\s+/g, " ").trim() ?? "";
+
 const stripTags = (html: string) =>
   html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -30,6 +44,127 @@ const stripTags = (html: string) =>
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const toAbsoluteAthomeUrl = (href: string) => {
+  try {
+    return new URL(href, "https://www.athome.co.jp").toString();
+  } catch {
+    return "";
+  }
+};
+
+const isAthomeListUrl = (url: string) => /^https:\/\/www\.athome\.co\.jp\/estate\/.+\/list\//i.test(url);
+
+const extractAthomeField = (text: string, labels: string[]) => {
+  for (const label of labels) {
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const matched = text.match(new RegExp(`${escaped}\\s*[：:]?\\s*([^\n]+)`, "i"));
+    if (matched?.[1]) return textOrEmpty(matched[1]);
+  }
+  return "";
+};
+
+const buildExtractedFromAthome = (item: AthomeCompany): ExtractResult => ({
+  company_name: item.companyName,
+  person_name: "",
+  address: item.address,
+  phone: item.tel,
+  fax: item.fax,
+  email: "",
+  website_url: item.websiteUrl,
+  source_url: item.detailUrl,
+  memo: "source: athome detail page",
+  title: item.companyName,
+  links: [item.detailUrl, item.websiteUrl].filter(Boolean),
+  extracted_at: new Date().toISOString(),
+});
+
+async function loadPlaywright(): Promise<{ chromium: { launch: (options: { headless: boolean }) => Promise<any> } }> {
+  try {
+    const importer = new Function("m", "return import(m)") as (m: string) => Promise<any>;
+    const mod = await importer("playwright");
+    if (!mod?.chromium) throw new Error("missing chromium");
+    return mod;
+  } catch {
+    throw new Error(
+      "AtHome抽出には Playwright が必要です。`npm install playwright` と `npx playwright install chromium` を実行してください。",
+    );
+  }
+}
+
+async function extractFromAthomeListing(sourceUrl: string) {
+  const playwright = await loadPlaywright();
+  const browser = await playwright.chromium.launch({ headless: true });
+
+  try {
+    const page = await browser.newPage({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    });
+
+    await page.goto(sourceUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+
+    const detailLinks = await page.evaluate(() => {
+      const hrefs = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/ahto/"]')).map((a) =>
+        a.getAttribute("href") ?? "",
+      );
+      return Array.from(new Set(hrefs));
+    });
+
+    const normalizedDetailLinks = detailLinks
+      .map(toAbsoluteAthomeUrl)
+      .filter((link) => /^https:\/\/www\.athome\.co\.jp\/ahto\/[^/]+\.html/i.test(link));
+
+    const results: ExtractResult[] = [];
+
+    for (const detailUrl of normalizedDetailLinks) {
+      const detailPage = await browser.newPage();
+
+      try {
+        await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+        const scraped = await detailPage.evaluate(() => {
+          const companyName =
+            document.querySelector<HTMLElement>("h1")?.innerText?.trim() ||
+            document.querySelector<HTMLElement>(".shopName")?.innerText?.trim() ||
+            document.title ||
+            "";
+
+          const allText = document.body?.innerText ?? "";
+          const homepageAnchor = Array.from(document.querySelectorAll<HTMLAnchorElement>("a[href]")).find((a) =>
+            /ホームページ/i.test(a.innerText ?? ""),
+          );
+
+          return {
+            companyName,
+            allText,
+            websiteUrl: homepageAnchor?.href ?? "",
+          };
+        });
+
+        results.push(
+          buildExtractedFromAthome({
+            detailUrl,
+            companyName: textOrEmpty(scraped.companyName),
+            tel: extractAthomeField(scraped.allText, ["TEL", "電話番号"]),
+            fax: extractAthomeField(scraped.allText, ["FAX"]),
+            address: extractAthomeField(scraped.allText, ["住所", "所在地"]),
+            websiteUrl: textOrEmpty(scraped.websiteUrl),
+          }),
+        );
+      } finally {
+        await detailPage.close();
+      }
+    }
+
+    if (results.length === 0) {
+      throw new Error("AtHomeの会社リンクを取得できませんでした。リストURLをご確認ください。");
+    }
+
+    return results;
+  } finally {
+    await browser.close();
+  }
+}
 
 const buildExtracted = (textInput: string, options: ExtractOptions) => {
   const text = textInput.replace(/\s+/g, " ").trim();
@@ -75,7 +210,7 @@ const buildExtracted = (textInput: string, options: ExtractOptions) => {
     links,
     extracted_at: new Date().toISOString(),
   } as ExtractResult;
-  };
+};
 
 const hasContactValue = (item: ExtractResult) =>
   [item.company_name, item.phone, item.fax, item.email, item.address].some((value) => value.trim().length > 0);
@@ -111,7 +246,12 @@ export function extractManyFromTextRows(textInput: string, options: ExtractOptio
 
   return [buildExtracted(textInput, options)];
 }
+
 export async function extractFromUrl(sourceUrl: string) {
+  if (isAthomeListUrl(sourceUrl)) {
+    return extractFromAthomeListing(sourceUrl);
+  }
+
   const controller = new AbortController();
   const timeoutMs = 12_000;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -142,12 +282,12 @@ export async function extractFromUrl(sourceUrl: string) {
     }
 
     const html = await response.text();
-      if ((response.redirected && isLikelyLoginUrl(response.url)) || isLikelyLoginPage(html)) {
+    if ((response.redirected && isLikelyLoginUrl(response.url)) || isLikelyLoginPage(html)) {
       throw new Error(
         "対象URLはログインが必要なページの可能性があります。公開ページのURLをご指定いただくか、ログイン不要なページをご利用ください。",
       );
     }
-   
+
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     const title = titleMatch?.[1]?.replace(/\s+/g, " ").trim() ?? "";
 
@@ -157,7 +297,7 @@ export async function extractFromUrl(sourceUrl: string) {
         .filter((href) => /^https?:\/\//i.test(href)),
     );
 
-  const baseUrl = new URL(sourceUrl);
+    const baseUrl = new URL(sourceUrl);
     const candidateLinks = uniq(
       Array.from(html.matchAll(/<a[^>]+href=["']([^"']+)["']/gi))
         .map((m) => m[1])
@@ -185,18 +325,14 @@ export async function extractFromUrl(sourceUrl: string) {
       }
     }
 
-    const extractedList = extractManyFromTextRows(pages.join("\n"), {
+    return extractManyFromTextRows(pages.join("\n"), {
       source: sourceUrl,
       title,
       links,
-      });
-
-    return extractedList;
+    });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
-     throw new Error(
-        `対象URLの取得がタイムアウトしました（${timeoutMs / 1000}秒）。しばらくしてから再試行してください。`,
-      );
+      throw new Error(`対象URLの取得がタイムアウトしました（${timeoutMs / 1000}秒）。しばらくしてから再試行してください。`);
     }
     throw error;
   } finally {
