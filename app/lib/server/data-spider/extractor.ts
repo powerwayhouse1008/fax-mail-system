@@ -58,6 +58,7 @@ const toAbsoluteAthomeUrl = (href: string) => {
 };
 
 const isAthomeListUrl = (url: string) => /^https:\/\/www\.athome\.co\.jp\/estate\/.+\/list\//i.test(url);
+const isSuumoListUrl = (url: string) => /^https?:\/\/suumo\.jp\/jj\/bukken\/ichiran\//i.test(url);
 
 const extractAthomeField = (text: string, labels: string[]) => {
   const stopWords = "TEL|FAX|電話番号|住所|所在地|営業時間|定休日|交通|取扱い|加盟団体|免許番号|ホームページ";
@@ -208,6 +209,76 @@ const extractAthomeDetailFromHtml = (html: string, detailUrl: string): ExtractRe
     address: extractAthomeField(allText, ["住所", "所在地"]),
     websiteUrl: textOrEmpty(homepageMatch?.[1] ?? ""),
   });
+};
+const decodeHtml = (value: string) =>
+  value
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"');
+
+const extractFromSuumoListingHtml = (html: string, sourceUrl: string): ExtractResult[] => {
+  const cardMatches = Array.from(html.matchAll(/<div[^>]+class=["'][^"']*cassetteitem[^"']*["'][^>]*>[\s\S]*?<\/table>/gi));
+  const results: ExtractResult[] = [];
+
+  for (const card of cardMatches) {
+    const cardHtml = card[0] ?? "";
+    const title = textOrEmpty(
+      decodeHtml(stripTags(cardHtml.match(/cassetteitem_content-title[^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1] ?? "")),
+    );
+    const address = textOrEmpty(
+      decodeHtml(stripTags(cardHtml.match(/cassetteitem_detail-col1[^>]*>([\s\S]*?)<\/li>/i)?.[1] ?? "")),
+    );
+    const station = textOrEmpty(
+      decodeHtml(stripTags(cardHtml.match(/cassetteitem_detail-col2[^>]*>([\s\S]*?)<\/li>/i)?.[1] ?? "")),
+    );
+    const rowMatches = Array.from(cardHtml.matchAll(/<tr[^>]+class=["'][^"']*js-cassette_link[^"']*["'][^>]*>[\s\S]*?<\/tr>/gi));
+    const rows = rowMatches.length > 0 ? rowMatches.map((row) => row[0] ?? "") : [cardHtml];
+
+    for (const rowHtml of rows) {
+      const detailHref = rowHtml.match(/<a[^>]+href=["']([^"']*\/jj\/bukken\/shosai\/[^"']+)["']/i)?.[1] ?? "";
+      const detailUrl = detailHref
+        ? (() => {
+            try {
+              return new URL(detailHref, sourceUrl).toString();
+            } catch {
+              return sourceUrl;
+            }
+          })()
+        : sourceUrl;
+
+      const price = textOrEmpty(
+        decodeHtml(stripTags(rowHtml.match(/cassetteitem_price--info[^>]*>([\s\S]*?)<\/td>/i)?.[1] ?? "")),
+      );
+      const layout = textOrEmpty(
+        decodeHtml(stripTags(rowHtml.match(/cassetteitem_madori[^>]*>([\s\S]*?)<\/td>/i)?.[1] ?? "")),
+      );
+      const area = textOrEmpty(
+        decodeHtml(stripTags(rowHtml.match(/cassetteitem_menseki[^>]*>([\s\S]*?)<\/td>/i)?.[1] ?? "")),
+      );
+
+      results.push({
+        company_name: title,
+        person_name: "",
+        address,
+        phone: "",
+        fax: "",
+        email: "",
+        website_url: "https://suumo.jp/",
+        source_url: detailUrl,
+        memo: [price ? `price: ${price}` : "", layout ? `layout: ${layout}` : "", area ? `area: ${area}` : "", station ? `station: ${station}` : ""]
+          .filter(Boolean)
+          .join(" / "),
+        title,
+        links: [detailUrl],
+        extracted_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  return results;
 };
 
 async function extractFromAthomeListingWithoutPlaywright(sourceUrl: string) {
@@ -374,6 +445,10 @@ export async function extractFromUrl(sourceUrl: string) {
     }
 
     const html = await response.text();
+    if (isSuumoListUrl(sourceUrl)) {
+      const suumoResults = extractFromSuumoListingHtml(html, sourceUrl);
+      if (suumoResults.length > 0) return suumoResults;
+    }
     if ((response.redirected && isLikelyLoginUrl(response.url)) || isLikelyLoginPage(html)) {
       throw new Error(
         "対象URLはログインが必要なページの可能性があります。公開ページのURLをご指定いただくか、ログイン不要なページをご利用ください。",
