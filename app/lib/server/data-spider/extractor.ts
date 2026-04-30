@@ -278,6 +278,41 @@ const extractFromSuumoListingHtml = (html: string, sourceUrl: string): ExtractRe
     }
   }
 
+  const detailLinksFromWholePage = uniq(
+    Array.from(html.matchAll(/href=["']([^"']*\/jj\/bukken\/shosai\/[^"']+)["']/gi))
+      .map((match) => match[1] ?? "")
+      .map((href) => {
+        try {
+          return new URL(href, sourceUrl).toString();
+        } catch {
+          return "";
+        }
+      })
+      .filter(Boolean),
+  );
+
+  if (detailLinksFromWholePage.length > results.length) {
+    const mappedBySource = new Map(results.map((item) => [item.source_url, item]));
+    return detailLinksFromWholePage.map((detailUrl) => {
+      const existing = mappedBySource.get(detailUrl);
+      if (existing) return existing;
+      return {
+        company_name: "",
+        person_name: "",
+        address: "",
+        phone: "",
+        fax: "",
+        email: "",
+        website_url: "https://suumo.jp/",
+        source_url: detailUrl,
+        memo: "source: suumo listing",
+        title: "",
+        links: [detailUrl],
+        extracted_at: new Date().toISOString(),
+      } as ExtractResult;
+    });
+  }
+
   return results;
 };
 
