@@ -4,6 +4,7 @@ import AzureAD from "next-auth/providers/azure-ad";
 const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
 const allowedDomain = process.env.AUTH_ALLOWED_EMAIL_DOMAIN;
 const tenantIssuer = `https://login.microsoftonline.com/${tenantId ?? "common"}/v2.0`;
+const redirectProxyUrl = process.env.AUTH_REDIRECT_PROXY_URL;
 
 export const authConfig: NextAuthConfig = {
   trustHost: true,
@@ -13,6 +14,7 @@ export const authConfig: NextAuthConfig = {
       clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID ?? "",
       clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET ?? "",
       issuer: tenantIssuer,
+       ...(redirectProxyUrl ? { redirectProxyUrl } : {}),
     }),
   ],
   callbacks: {
