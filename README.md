@@ -44,3 +44,12 @@ NEXILINK_SENDER_ID=
 # NexiLink yêu cầu:
 # Authorization: token YOUR_API_TOKEN
 NEXLINK_AUTH_SCHEME=token
+# =========================
+# Microsoft Entra ID Login
+# =========================
+AUTH_SECRET=replace-with-random-secret
+AUTH_MICROSOFT_ENTRA_ID_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+AUTH_MICROSOFT_ENTRA_ID_SECRET=xxxxxxxxxxxxxxxxxxxx
+AUTH_MICROSOFT_ENTRA_ID_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+# Optional: only allow email in this domain (without @)
+AUTH_ALLOWED_EMAIL_DOMAIN=yourcompany.co.j
