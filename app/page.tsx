@@ -2,17 +2,20 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 export default function HomePage() {
   const router = useRouter();
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
 
 
-  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+  const handlePasswordLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
-    setLoading(true);
+    setPasswordLoading(true);
+    
     try {
       const formData = new FormData(event.currentTarget);
       const response = await fetch("/api/auth/login", {
@@ -24,56 +27,50 @@ export default function HomePage() {
         }),
       });
 
-    if (!response.ok) {
+     if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
         setError(payload?.message ?? "ログインに失敗しました。");
         return;
       }
 
-   const nextUrl =
-        new URLSearchParams(window.location.search).get("next") || "/dashboard";
+   const nextUrl = new URLSearchParams(window.location.search).get("next") || "/dashboard";
       router.push(nextUrl);
     } finally {
-      setLoading(false);
+      setPasswordLoading(false);
     }
+  };
+   const handleMicrosoftLogin = async () => {
+    setMicrosoftLoading(true);
+    const nextUrl = new URLSearchParams(window.location.search).get("next") || "/dashboard";
+    await signIn("azure-ad", { callbackUrl: nextUrl });
+    setMicrosoftLoading(false);
   };
 
   return (
     <main className="home-shell">
       <section className="hero-card login-card">
-        <p className="badge">Adminロクイン</p>
+        <p className="badge">社内システムログイン</p>
         <h1>FAX &amp; Gmail Portal</h1>
+        <p className="description">Microsoft Outlookまたは従来ID/パスワードでログインしてください。</p>
 
-        <p className="description">FAX送信・メール送信・履歴管理の初期構成です。</p>
-        <form className="admin-form" onSubmit={handleLogin}>
+        <button className="btn btn-primary" type="button" onClick={handleMicrosoftLogin} disabled={microsoftLoading}>
+          {microsoftLoading ? "Redirecting..." : "Microsoftでログイン"}
+        </button>
+
+        <div style={{ margin: "14px 0", opacity: 0.75 }}>— または —</div>
+
+        <form className="admin-form" onSubmit={handlePasswordLogin}>
           <label className="field">
             <span>ID</span>
-            <input
-              name="username"
-              placeholder="ID"
-              autoComplete="username"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              required
-            />
+            <input name="username" placeholder="ID" autoComplete="username" required />
           </label>
           <label className="field">
             <span>パスワード</span>
-             <input
-              name="password"
-              type="password"
-              placeholder="パスワード"
-              autoComplete="current-password"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              required
-            />
+             <input name="password" type="password" placeholder="パスワード" autoComplete="current-password" required />
           </label>
           {error ? <p className="send-notice send-notice-error">{error}</p> : null}
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? "Đang đăng nhập..." : "ログイン"}
+          <button className="btn" type="submit" disabled={passwordLoading}>
+            {passwordLoading ? "Đang đăng nhập..." : "ID/パスワードでログイン"}
           </button>
         </form>
       </section>
