@@ -22,9 +22,16 @@ export async function middleware(request: NextRequest) {
   }
  
 
-  const oauthToken = await getToken({ req: request, secret: process.env.AUTH_SECRET });
-  if (oauthToken) {
-    return NextResponse.next();
+ const authSecret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (authSecret) {
+    try {
+      const oauthToken = await getToken({ req: request, secret: authSecret });
+      if (oauthToken) {
+        return NextResponse.next();
+      }
+    } catch (error) {
+      console.error("[middleware] Failed to parse OAuth token", error);
+    }
   }
 
   const legacyToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
