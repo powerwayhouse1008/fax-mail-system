@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 import { AUTH_COOKIE_NAME } from "./app/lib/auth";
-
+import { verifySessionToken } from "./app/lib/server/session";
 
 const protectedPaths = [
   "/dashboard",
@@ -12,7 +13,7 @@ const protectedPaths = [
   "/admin",
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const needsAuth = protectedPaths.some((path) => pathname.startsWith(path));
 
@@ -21,8 +22,14 @@ export function middleware(request: NextRequest) {
   }
  
 
-  const authCookie = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  if (authCookie) {
+  const oauthToken = await getToken({ request, secret: process.env.AUTH_SECRET });
+  if (oauthToken) {
+    return NextResponse.next();
+  }
+
+  const legacyToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const legacySession = verifySessionToken(legacyToken);
+  if (legacySession) {
     return NextResponse.next();
   }
 
