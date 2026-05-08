@@ -575,15 +575,31 @@ function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
 
-function escapePdfText(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+function toPdfUnicodeHex(value: string) {
+  const utf16beBytes: number[] = [0xfe, 0xff];
+  for (const char of value) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) continue;
+
+    if (codePoint <= 0xffff) {
+      utf16beBytes.push((codePoint >> 8) & 0xff, codePoint & 0xff);
+      continue;
+    }
+
+    const adjusted = codePoint - 0x10000;
+    const high = 0xd800 + (adjusted >> 10);
+    const low = 0xdc00 + (adjusted & 0x3ff);
+    utf16beBytes.push((high >> 8) & 0xff, high & 0xff, (low >> 8) & 0xff, low & 0xff);
+  }
+
+  return Buffer.from(utf16beBytes).toString("hex").toUpperCase();
 }
 
 function createSimplePdf(lines: string[]) {
-  const normalizedLines = lines.slice(0, 90).map((line) => escapePdfText(line.slice(0, 140)));
+ const normalizedLines = lines.slice(0, 90).map((line) => line.slice(0, 140));
   const textOps = normalizedLines.length
-    ? normalizedLines.map((line) => `(${line}) Tj`).join(" T* ")
-    : "( ) Tj";
+    ? normalizedLines.map((line) => `<${toPdfUnicodeHex(line)}> Tj`).join(" T* ")
+    : `<${toPdfUnicodeHex(" ")}> Tj`;
   const contentStream = `BT /F1 11 Tf 50 792 Td 14 TL ${textOps} ET`;
   const contentLength = Buffer.byteLength(contentStream, "utf-8");
 
@@ -591,8 +607,9 @@ function createSimplePdf(lines: string[]) {
     "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
     "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
     "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
-    "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+     "4 0 obj << /Type /Font /Subtype /Type0 /BaseFont /HeiseiKakuGo-W5 /Encoding /UniJIS-UCS2-H /DescendantFonts [6 0 R] >> endobj\n",
     `5 0 obj << /Length ${contentLength} >> stream\n${contentStream}\nendstream endobj\n`,
+    "6 0 obj << /Type /Font /Subtype /CIDFontType0 /BaseFont /HeiseiKakuGo-W5 /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 5 >> /DW 1000 >> endobj\n",
   ];
 
   let output = "%PDF-1.4\n";
