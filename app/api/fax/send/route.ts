@@ -653,7 +653,18 @@ function buildPayloadPdfAttachment(payload: RequestPayload): BinaryAttachment | 
 }
 
 function textToPdf(binary: Buffer) {
-  const text = binary.toString("utf-8");
+  const utf8Text = binary.toString("utf-8");
+  const hasReplacementCharacters = utf8Text.includes("\uFFFD");
+  const hasMojibakePattern = /[ãâ][\x80-\xBF]/.test(utf8Text);
+
+  let text = utf8Text;
+  if (hasReplacementCharacters || hasMojibakePattern) {
+    try {
+      text = new TextDecoder("shift_jis").decode(binary);
+    } catch {
+      text = utf8Text;
+    }
+  }
   return createSimplePdf(text.split(/\r?\n/));
 }
 
