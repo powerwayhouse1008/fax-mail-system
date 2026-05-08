@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { AUTH_COOKIE_NAME } from "./app/lib/auth";
-import { verifySessionToken } from "./app/lib/server/session";
+
 
 const protectedPaths = [
   "/dashboard",
@@ -35,8 +35,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const legacyToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  const legacySession = verifySessionToken(legacyToken);
-  if (legacySession) {
+  if (legacyToken) {
     return NextResponse.next();
   }
 
