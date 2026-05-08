@@ -22,7 +22,7 @@ export async function middleware(request: NextRequest) {
   }
  
 
-  const oauthToken = await getToken({ request, secret: process.env.AUTH_SECRET });
+  const oauthToken = await getToken({ req: request, secret: process.env.AUTH_SECRET });
   if (oauthToken) {
     return NextResponse.next();
   }
