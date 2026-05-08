@@ -175,7 +175,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
           if (faxSummaryText || businessCardHtml) {
             setMailBodyText(
-              [faxSummaryText, uploadedCardUrl ? `名刺: ${uploadedCardName} (${uploadedCardUrl})` : ""]
+              [faxSummaryText, uploadedCardUrl ? `名刺: ${uploadedCardName}（画像を本文に挿入）` : ""]
                 .filter(Boolean)
                 .join("\n"),
             );
