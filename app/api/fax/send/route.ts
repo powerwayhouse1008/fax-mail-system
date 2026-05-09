@@ -922,13 +922,13 @@ async function uploadFacsimileContent(
   file: { filename: string; mimeType: string; binary: Buffer },
 ) {
   const url = buildUrl(baseUrl, `${API_PATH_FACSIMILES}/${facsimileId}/contents`);
-
+  const filename = ensurePdfFilename(file.filename);
   const response = await callWithAuthFallback(url, apiToken, (authHeader) => {
     const formData = new FormData();
     formData.append(
       "file",
-      new Blob([toArrayBuffer(file.binary)], { type: file.mimeType || "application/pdf" }),
-      file.filename,
+      new Blob([toArrayBuffer(file.binary)], { type: "application/pdf" }),
+      filename,
     );
 
     return {
