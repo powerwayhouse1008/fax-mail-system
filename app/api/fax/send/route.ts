@@ -689,7 +689,15 @@ async function ensurePdfAttachment(file: BinaryAttachment): Promise<BinaryAttach
   const mimeType = file.mimeType.toLowerCase();
   
 if (mimeType.startsWith("image/")) {
-    return { ...file, mimeType };
+    return {
+      filename: replaceExtension(file.filename, ".pdf"),
+      mimeType: "application/pdf",
+      binary: createSimplePdf([
+        "画像ファイルを受信しました。",
+        `元ファイル名: ${file.filename}`,
+        "この環境では画像を直接PDFへ変換できないため、本文に画像URLを貼り付けて送信してください。",
+      ]),
+    };
   }
 
   if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
