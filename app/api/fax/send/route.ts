@@ -571,8 +571,16 @@ function replaceExtension(filename: string, extension: string) {
   return `${withoutExtension}${extension}`;
 }
 function ensurePdfFilename(filename: string) {
-  return /\.pdf$/i.test(filename) ? filename : replaceExtension(filename, ".pdf");
+  const trimmed = filename.trim();
+  const leaf = trimmed.split(/[\\/]/).pop() ?? "";
+  const withoutQuery = leaf.split(/[?#]/)[0] ?? "";
+  const normalized = withoutQuery.trim();
+  if (!normalized) return "fax-content.pdf";
+
+  const pdfNamed = /\.pdf$/i.test(normalized) ? normalized : replaceExtension(normalized, ".pdf");
+  return pdfNamed.toLowerCase().endsWith(".pdf") ? pdfNamed : "fax-content.pdf";
 }
+
 function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
