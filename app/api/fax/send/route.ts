@@ -570,7 +570,9 @@ function replaceExtension(filename: string, extension: string) {
   const withoutExtension = filename.replace(/\.[^./\\]+$/, "");
   return `${withoutExtension}${extension}`;
 }
-
+function ensurePdfFilename(filename: string) {
+  return /\.pdf$/i.test(filename) ? filename : replaceExtension(filename, ".pdf");
+}
 function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
@@ -701,7 +703,11 @@ if (mimeType.startsWith("image/")) {
   }
 
   if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
-    return { ...file, mimeType: "application/pdf" };
+    return {
+      ...file,
+      filename: ensurePdfFilename(file.filename),
+      mimeType: "application/pdf",
+    };
   }
 
   if (
