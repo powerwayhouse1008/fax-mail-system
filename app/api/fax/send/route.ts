@@ -584,6 +584,15 @@ function ensurePdfFilename(filename: string) {
 function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
+function isLikelyValidPdf(binary: Buffer) {
+  if (!isPdfBinary(binary)) return false;
+
+  const tail = binary.subarray(Math.max(0, binary.length - 2048)).toString("latin1");
+  if (!tail.includes("%%EOF")) return false;
+
+  const head = binary.subarray(0, Math.min(binary.length, 4096)).toString("latin1");
+  return head.includes("xref") || head.includes("/XRef") || head.includes("/Type /Catalog");
+}
 
 function toPdfUnicodeHex(value: string) {
   const utf16beBytes: number[] = [0xfe, 0xff];
@@ -711,6 +720,18 @@ if (mimeType.startsWith("image/")) {
   }
 
   if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
+    if (!isLikelyValidPdf(file.binary)) {
+      return {
+        filename: replaceExtension(file.filename, ".pdf"),
+        mimeType: "application/pdf",
+        binary: createSimplePdf([
+          "アップロードされたPDFを検証したところ、FAX送信APIで受理されない形式でした。",
+          `元ファイル名: ${file.filename}`,
+          "",
+          "PDFを再保存（印刷→PDF）して再アップロードしてください。",
+        ]),
+      };
+    }
     return {
       ...file,
       filename: ensurePdfFilename(file.filename),
