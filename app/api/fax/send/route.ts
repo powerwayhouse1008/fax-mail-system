@@ -1136,17 +1136,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
   } else {
-    const inlineImageAttachment = await buildInlineImageAttachment(payload);
-    if (inlineImageAttachment) {
-      const inlineMimeType = inlineImageAttachment.mimeType.toLowerCase();
-      if (inlineMimeType === "image/jpeg" || inlineMimeType === "image/jpg") {
-        pdfFile = await ensurePdfAttachment(inlineImageAttachment);
-      } else {
-        pdfFile = buildPayloadPdfAttachment(payload);
-      }
-    } else {
-      pdfFile = buildPayloadPdfAttachment(payload);
-    }
+    pdfFile = buildPayloadPdfAttachment(payload);
   }
 
   if (!pdfFile) {
