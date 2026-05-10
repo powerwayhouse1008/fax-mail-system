@@ -98,7 +98,7 @@ function normalizeFaxNumber(value: string) {
     });
 
   const candidates = normalized.match(/[+()0-9][0-9+\-()\s]{5,29}/g);
-  if (!candidates || candidates.length === 0) return "";
+   if (!candidates || candidates.length === 0) return "";
 
   return candidates[0]
     .trim()
