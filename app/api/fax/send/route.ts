@@ -594,34 +594,44 @@ function isLikelyValidPdf(binary: Buffer) {
   return head.includes("xref") || head.includes("/XRef") || head.includes("/Type /Catalog");
 }
 
-function toPdfLiteralString(value: string) {
-  return value
-    .replace(/[\r\n]+/g, " ")
-    .replace(/[^ -~]/g, "?")
-    .replace(/\\/g, "\\\\")
-    .replace(/\(/g, "\\(")
-    .replace(/\)/g, "\\)");
+function toPdfHexString(value: string) {
+  const normalized = value.replace(/[\r\n]+/g, " ").slice(0, 140);
+  const utf16beHex = Buffer.from(normalized, "utf16le")
+    .swap16()
+    .toString("hex")
+    .toUpperCase();
+  return `<FEFF${utf16beHex}>`;
 }
 
 function createSimplePdf(lines: string[]) {
-  const normalizedLines = lines.slice(0, 90).map((line) => line.slice(0, 140));
+  const normalizedLines = lines.slice(0, 90);
   const textOps = normalizedLines.length
     ? normalizedLines
-        .map((line) => `(${toPdfLiteralString(line)}) Tj`)
+        .map((line) => `${toPdfHexString(line)} Tj`)
         .join(" T* ")
-    : `(${toPdfLiteralString(" ")}) Tj`;
+    : `${toPdfHexString(" ")} Tj`;
   const contentStream = `BT /F1 11 Tf 50 792 Td 14 TL ${textOps} ET`;
   const contentLength = Buffer.byteLength(contentStream, "utf-8");
 
   const objects: string[] = [
-    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
-    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
-    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
-    "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> endobj\n",    
-    `5 0 obj << /Length ${contentLength} >> stream\n${contentStream}\nendstream endobj\n`,
+  "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+",
+    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+",
+    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 6 0 R >> endobj
+",
+    "4 0 obj << /Type /Font /Subtype /Type0 /BaseFont /HeiseiKakuGo-W5 /Encoding /Identity-H /DescendantFonts [5 0 R] >> endobj
+",
+    "5 0 obj << /Type /Font /Subtype /CIDFontType0 /BaseFont /HeiseiKakuGo-W5 /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 5 >> /DW 1000 >> endobj
+",
+    `6 0 obj << /Length ${contentLength} >> stream
+${contentStream}
+endstream endobj
+`,
   ];
 
-  let output = "%PDF-1.4\n";
+  let output = "%PDF-1.4
+";
   const offsets = [0];
   for (const obj of objects) {
     offsets.push(Buffer.byteLength(output, "utf-8"));
@@ -629,11 +639,19 @@ function createSimplePdf(lines: string[]) {
   }
 
   const xrefStart = Buffer.byteLength(output, "utf-8");
-  output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  output += `xref
+0 ${objects.length + 1}
+0000000000 65535 f 
+`;
   for (let i = 1; i < offsets.length; i += 1) {
-    output += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
+    output += `${String(offsets[i]).padStart(10, "0")} 00000 n 
+`;
   }
-  output += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+  output += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>
+startxref
+${xrefStart}
+%%EOF
+`;
   return Buffer.from(output, "utf-8");
 }
 function htmlToPlainText(html: string) {
@@ -704,7 +722,7 @@ if (mimeType.startsWith("image/")) {
       binary: createSimplePdf([
         "画像ファイルを受信しました。",
         `元ファイル名: ${file.filename}`,
-        "この環境では画像を直接PDFへ変換できないため、本文に画像URLを貼り付けて送信してください。",
+        "この環境では画像を直接PDFへ変換できないため、画像は添付ファイルとして送信されます。",
       ]),
     };
   }
