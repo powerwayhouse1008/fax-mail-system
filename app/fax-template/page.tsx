@@ -52,6 +52,15 @@ type SessionResponse = {
     username?: string;
   };
 };
+
+const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|gif|bmp|webp|svg|heic|heif)$/i;
+
+const isLikelyImageAttachment = (fileName: string, mimeType: string) => {
+  if (mimeType.startsWith("image/")) {
+    return true;
+  }
+  return IMAGE_EXTENSION_PATTERN.test(fileName.trim());
+};
 const channelLabels: Record<string, string> = {
   fax: "FAX一括送信",
   gmail: "Gmail配信",
@@ -557,11 +566,27 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
               />
               <hr />
               <pre>{content.signature}</pre>
-               <div className="gmail-attachments-preview">
-                <strong>添付ファイル:</strong>{" "}
-                {gmailAttachments.length > 0
-                  ? gmailAttachments.map((file) => file.name).join(", ")
-                  : "（なし）"}
+              <div className="gmail-attachments-preview">
+                <strong>添付ファイル:</strong>
+                {gmailAttachments.length > 0 ? (
+                  <ul>
+                    {gmailAttachments.map((file, index) => {
+                      const showImage = isLikelyImageAttachment(file.name, file.type);
+                      return (
+                        <li key={`${file.name}-${index}`}>
+                          {showImage ? (
+                            <img src={file.url} alt={file.name} style={{ maxWidth: "220px", height: "auto" }} />
+                          ) : null}
+                          <a href={file.url} target="_blank" rel="noreferrer">
+                            {file.name}
+                          </a>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  "（なし）"
+                )}
               </div>
             </div>
           </section>
@@ -617,7 +642,7 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
               <td>
                 {uploadedCardUrl ? (
                   <div className="business-card-preview">
-                    {uploadedCardType.startsWith("image/") ? (
+                    {isLikelyImageAttachment(uploadedCardName, uploadedCardType) ? (
                       <img src={uploadedCardUrl} alt="名刺プレビュー" />
                     ) : (
                       <a href={uploadedCardUrl} target="_blank" rel="noreferrer">
