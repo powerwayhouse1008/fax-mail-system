@@ -60,6 +60,50 @@ const isLikelyImageAttachment = (fileName: string, mimeType: string) => {
   }
   return IMAGE_EXTENSION_PATTERN.test(fileName.trim());
 };
+
+const convertImageToJpegFile = async (file: File): Promise<File> => {
+  if (typeof window === "undefined" || !file.type.startsWith("image/")) {
+    return file;
+  }
+  if (file.type === "image/jpeg" || file.type === "image/jpg") {
+    return file;
+  }
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(new Error("read image failed"));
+    reader.readAsDataURL(file);
+  });
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const node = new Image();
+    node.onload = () => resolve(node);
+    node.onerror = () => reject(new Error("load image failed"));
+    node.src = dataUrl;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return file;
+  }
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0);
+
+  const jpegBlob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", 0.92);
+  });
+  if (!jpegBlob) {
+    return file;
+  }
+
+  const normalizedName = file.name.replace(/\.[^./\\]+$/, "") || "fax-image";
+  return new File([jpegBlob], `${normalizedName}.jpg`, { type: "image/jpeg" });
+};
 const channelLabels: Record<string, string> = {
   fax: "FAX一括送信",
   gmail: "Gmail配信",
@@ -313,10 +357,11 @@ useEffect(() => {
       return;
     }
 
-     try {
-      const uploadedUrl = await uploadFileToSupabase(file, "cards");
-      setUploadedCardName(file.name);
-      setUploadedCardType(file.type);
+       try {
+      const faxReadyFile = await convertImageToJpegFile(file);
+      const uploadedUrl = await uploadFileToSupabase(faxReadyFile, "cards");
+      setUploadedCardName(faxReadyFile.name);
+      setUploadedCardType(faxReadyFile.type);
      setUploadedCardUrl(uploadedUrl);
     } catch (error) {
       setSaveMessage(
