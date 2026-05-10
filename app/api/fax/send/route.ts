@@ -594,32 +594,33 @@ function isLikelyValidPdf(binary: Buffer) {
   return head.includes("xref") || head.includes("/XRef") || head.includes("/Type /Catalog");
 }
 
-function toPdfHexString(value: string) {
-  const normalized = value.replace(/[\r\n]+/g, " ").slice(0, 140);
-  const utf16beHex = Buffer.from(normalized, "utf16le")
-    .swap16()
-    .toString("hex")
-    .toUpperCase();
-  return `<FEFF${utf16beHex}>`;
+function toPdfLiteralString(value: string) {
+  const normalized = value
+    .replace(/[\r\n]+/g, " ")
+    .slice(0, 180)
+    .replace(/[^\x20-\x7E]/g, "?")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+  return `(${normalized || " "})`;
 }
 
 function createSimplePdf(lines: string[]) {
   const normalizedLines = lines.slice(0, 90);
   const textOps = normalizedLines.length
     ? normalizedLines
-        .map((line) => `${toPdfHexString(line)} Tj`)
+                .map((line) => `${toPdfLiteralString(line)} Tj`)
         .join(" T* ")
-    : `${toPdfHexString(" ")} Tj`;
+        : `${toPdfLiteralString(" ")} Tj`;
   const contentStream = `BT /F1 11 Tf 50 792 Td 14 TL ${textOps} ET`;
   const contentLength = Buffer.byteLength(contentStream, "utf-8");
 
   const objects: string[] = [
   "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
     "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
-    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 6 0 R >> endobj\n",
-    "4 0 obj << /Type /Font /Subtype /Type0 /BaseFont /HeiseiKakuGo-W5 /Encoding /UniJIS-UTF16-H /DescendantFonts [5 0 R] >> endobj\n",
-    "5 0 obj << /Type /Font /Subtype /CIDFontType0 /BaseFont /HeiseiKakuGo-W5 /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 7 >> /DW 1000 >> endobj\n",
-    `6 0 obj << /Length ${contentLength} >> stream
+    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
+    "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+    `5 0 obj << /Length ${contentLength} >> stream
 ${contentStream}
 endstream endobj
 `,
