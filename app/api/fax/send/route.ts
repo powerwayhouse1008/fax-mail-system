@@ -614,24 +614,18 @@ function createSimplePdf(lines: string[]) {
   const contentLength = Buffer.byteLength(contentStream, "utf-8");
 
   const objects: string[] = [
-  "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
-",
-    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
-",
-    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 6 0 R >> endobj
-",
-    "4 0 obj << /Type /Font /Subtype /Type0 /BaseFont /HeiseiKakuGo-W5 /Encoding /Identity-H /DescendantFonts [5 0 R] >> endobj
-",
-    "5 0 obj << /Type /Font /Subtype /CIDFontType0 /BaseFont /HeiseiKakuGo-W5 /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 5 >> /DW 1000 >> endobj
-",
+  "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 6 0 R >> endobj\n",
+    "4 0 obj << /Type /Font /Subtype /Type0 /BaseFont /HeiseiKakuGo-W5 /Encoding /Identity-H /DescendantFonts [5 0 R] >> endobj\n",
+    "5 0 obj << /Type /Font /Subtype /CIDFontType0 /BaseFont /HeiseiKakuGo-W5 /CIDSystemInfo << /Registry (Adobe) /Ordering (Japan1) /Supplement 5 >> /DW 1000 >> endobj\n",
     `6 0 obj << /Length ${contentLength} >> stream
 ${contentStream}
 endstream endobj
 `,
   ];
 
-  let output = "%PDF-1.4
-";
+  let output = "%PDF-1.4\n";
   const offsets = [0];
   for (const obj of objects) {
     offsets.push(Buffer.byteLength(output, "utf-8"));
