@@ -128,9 +128,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
         if (draftContent.cc?.trim()) {
           setCcListInput(draftContent.cc);
         }
-        if (draftContent.bcc?.trim()) {
-          setBccListInput(draftContent.bcc);
-        }
 
         if (isGmailChannel) {
           const bodyHtml = bodyFromEditor || (messageBody ? `<p>${messageBody}</p>` : "");
