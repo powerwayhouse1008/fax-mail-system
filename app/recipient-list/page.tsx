@@ -16,8 +16,8 @@ type RecipientListPageProps = {
 type FaxTemplateContent = {
   to?: string;
   from?: string;
+  faxNumber?: string;
   cc?: string;
-  bcc?: string;
   subject?: string;
   greeting?: string;
   request?: string;
@@ -31,6 +31,7 @@ type FaxTemplateContent = {
   address?: string;
   phoneAndFax?: string;
 };
+type AttachmentPayload = { filename: string; content?: string; url?: string; type: string };
 
 type SavedDraft = {
   content?: FaxTemplateContent;
@@ -65,9 +66,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const [mailBodyText, setMailBodyText] = useState("FAX Mail System からの送信テストです。");
   const [ccListInput, setCcListInput] = useState("");
   const [bccListInput, setBccListInput] = useState("");
-  const [attachments, setAttachments] = useState<
-     { filename: string; content?: string; url?: string; type: string }[]
-  >([]);
+  const [attachments, setAttachments] = useState<AttachmentPayload[]>([]);
+  const [faxDraftContent, setFaxDraftContent] = useState<FaxTemplateContent>({});
   const [uploadedCard, setUploadedCard] = useState<{
     url: string;
     name: string;
@@ -116,6 +116,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       try {
         const parsed = JSON.parse(savedDraft) as SavedDraft;
         const draftContent = parsed.content ?? {};
+        setFaxDraftContent(draftContent);
         const subject = draftContent.subject?.trim();
         const bodyFromEditor = parsed.messageBodyHtml?.trim();
         const messageBody = draftContent.messageBody?.trim();
@@ -205,6 +206,76 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       mounted = false;
     };
   }, [channel, isGmailChannel]);
+  
+  const buildFaxPreviewAttachment = async (): Promise<AttachmentPayload | null> => {
+    if (isGmailChannel) return null;
+    if (typeof window === "undefined") return null;
+
+    const width = 1240;
+    const height = 1754;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = "#111";
+
+    const drawText = (text: string, x: number, y: number, size = 36, weight = "400") => {
+      ctx.font = `${weight} ${size}px sans-serif`;
+      ctx.fillText(text, x, y);
+    };
+
+    drawText("見積送付状", 70, 90, 52, "700");
+    drawText(`TO: ${faxDraftContent.to || ""}`, 70, 160);
+    drawText(`FAX: ${faxDraftContent.faxNumber || ""}`, 70, 210);
+    drawText(`FROM: ${faxDraftContent.from || ""}`, 70, 260);
+    drawText(`${faxDraftContent.greeting || ""}`, 70, 330);
+    drawText(`${faxDraftContent.request || ""}`, 70, 390);
+    drawText(`連絡事項: ${faxDraftContent.contact || ""}`, 70, 450);
+
+    ctx.strokeStyle = "#111";
+    ctx.strokeRect(70, 500, width - 140, 650);
+    drawText("物件名 / 室", 90, 560, 30, "700");
+    drawText(faxDraftContent.propertyName || "", 360, 560, 30);
+    drawText("内見希望日", 90, 640, 30, "700");
+    drawText(faxDraftContent.preferredDate || "", 360, 640, 30);
+    drawText("内見希望時間", 90, 720, 30, "700");
+    drawText(faxDraftContent.preferredTime || "", 360, 720, 30);
+    drawText("名刺", 90, 800, 30, "700");
+
+    ctx.strokeRect(340, 760, 760, 360);
+    if (uploadedCard?.url && uploadedCard.type.startsWith("image/")) {
+      const image = await new Promise<HTMLImageElement | null>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = uploadedCard.url;
+      });
+      if (image) {
+        const ratio = Math.min(740 / image.width, 340 / image.height);
+        const drawWidth = image.width * ratio;
+        const drawHeight = image.height * ratio;
+        const x = 350 + (740 - drawWidth) / 2;
+        const y = 770 + (340 - drawHeight) / 2;
+        ctx.drawImage(image, x, y, drawWidth, drawHeight);
+      }
+    }
+
+    drawText(`${faxDraftContent.companyName || ""}`, 70, 1260, 36, "700");
+    drawText(`${faxDraftContent.address || ""}`, 70, 1320, 32);
+    drawText(`${faxDraftContent.phoneAndFax || ""}`, 70, 1380, 32);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    return {
+      filename: "fax-a4-preview.jpg",
+      content: dataUrl.split(",")[1] || "",
+      type: "image/jpeg",
+    };
+  };
   const handleSend = async () => {
     if (maxLength === 0) {
       setSendMessage({
@@ -218,6 +289,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     setSendMessage(null);
 
     try {
+      const faxPreviewAttachment = await buildFaxPreviewAttachment();
+      const faxAttachments = faxPreviewAttachment ? [faxPreviewAttachment] : attachments;
       const [faxResponse, gmailResponse] = await Promise.all([
         faxNumbers.length > 0
           ? fetch("/api/fax/send", {
@@ -230,7 +303,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
                 subject: mailSubject,
                 html: mailBodyHtml,
                 text: mailBodyText,
-                attachments,
+                attachments: faxAttachments,
                 fax_quality: 1,
                 mapping_columns: JSON.stringify({ fax: 0 }),
               }),
