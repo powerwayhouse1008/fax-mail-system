@@ -648,6 +648,73 @@ ${xrefStart}
 `;
   return Buffer.from(output, "utf-8");
 }
+function createJpegPdf(imageBinary: Buffer) {
+  let width = 1200;
+  let height = 1600;
+
+  for (let i = 0; i < imageBinary.length - 9; i += 1) {
+    if (imageBinary[i] === 0xff && imageBinary[i + 1] === 0xc0) {
+      height = imageBinary.readUInt16BE(i + 5);
+      width = imageBinary.readUInt16BE(i + 7);
+      break;
+    }
+  }
+
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const scale = Math.min(pageWidth / width, pageHeight / height);
+  const drawWidth = Math.max(1, Math.floor(width * scale));
+  const drawHeight = Math.max(1, Math.floor(height * scale));
+  const x = Math.floor((pageWidth - drawWidth) / 2);
+  const y = Math.floor((pageHeight - drawHeight) / 2);
+
+  const contentStream = `q ${drawWidth} 0 0 ${drawHeight} ${x} ${y} cm /Im0 Do Q`;
+  const contentLength = Buffer.byteLength(contentStream, "utf-8");
+  const imageLength = imageBinary.length;
+
+  const objects: Buffer[] = [
+    Buffer.from("1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+", "ascii"),
+    Buffer.from("2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+", "ascii"),
+    Buffer.from("3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >> endobj
+", "ascii"),
+    Buffer.from(`4 0 obj << /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageLength} >> stream
+`, "ascii"),
+    imageBinary,
+    Buffer.from("
+endstream endobj
+", "ascii"),
+    Buffer.from(`5 0 obj << /Length ${contentLength} >> stream
+${contentStream}
+endstream endobj
+`, "ascii"),
+  ];
+
+  let output = Buffer.from("%PDF-1.4
+", "ascii");
+  const offsets = [0];
+  for (const obj of objects) {
+    offsets.push(output.length);
+    output = Buffer.concat([output, obj]);
+  }
+
+  const xrefStart = output.length;
+  let xref = `xref
+0 ${objects.length + 1}
+0000000000 65535 f 
+`;
+  for (let i = 1; i < offsets.length; i += 1) {
+    xref += `${String(offsets[i]).padStart(10, "0")} 00000 n 
+`;
+  }
+  xref += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>
+startxref
+${xrefStart}
+%%EOF
+`;
+  return Buffer.concat([output, Buffer.from(xref, "ascii")]);
+}
 function htmlToPlainText(html: string) {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -710,13 +777,21 @@ async function ensurePdfAttachment(file: BinaryAttachment): Promise<BinaryAttach
   const mimeType = file.mimeType.toLowerCase();
   
 if (mimeType.startsWith("image/")) {
+  if (mimeType === "image/jpeg" || mimeType === "image/jpg") {
+      return {
+        filename: replaceExtension(file.filename, ".pdf"),
+        mimeType: "application/pdf",
+        binary: createJpegPdf(file.binary),
+      };
+    }
     return {
       filename: replaceExtension(file.filename, ".pdf"),
       mimeType: "application/pdf",
       binary: createSimplePdf([
         "画像ファイルを受信しました。",
         `元ファイル名: ${file.filename}`,
-        "この環境では画像を直接PDFへ変換できないため、画像は添付ファイルとして送信されます。",
+        "JPEG画像はそのままFAX送信用PDFに変換されます。",
+        "PNG/HEIC等は未対応のため、PDF化して添付してください。",
       ]),
     };
   }
