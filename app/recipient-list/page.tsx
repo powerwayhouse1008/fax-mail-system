@@ -65,7 +65,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const [mailBodyHtml, setMailBodyHtml] = useState("<p>FAX Mail System からの送信テストです。</p>");
   const [mailBodyText, setMailBodyText] = useState("FAX Mail System からの送信テストです。");
   const [ccListInput, setCcListInput] = useState("");
-  const [bccListInput, setBccListInput] = useState("");
   const [attachments, setAttachments] = useState<AttachmentPayload[]>([]);
   const [faxDraftContent, setFaxDraftContent] = useState<FaxTemplateContent>({});
   const [uploadedCard, setUploadedCard] = useState<{
@@ -86,7 +85,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const faxNumbers = useMemo(() => cleanList(faxListInput), [faxListInput]);
   const gmailAddresses = useMemo(() => cleanList(gmailListInput), [gmailListInput]);
   const ccAddresses = useMemo(() => cleanList(ccListInput), [ccListInput]);
-  const bccAddresses = useMemo(() => cleanList(bccListInput), [bccListInput]);
   const maxLength = Math.max(faxNumbers.length, gmailAddresses.length);
 
     useEffect(() => {
@@ -315,7 +313,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
               body: JSON.stringify({
                 emails: gmailAddresses,
                 cc: ccAddresses,
-                bcc: bccAddresses,
                 subject: mailSubject,
                 html: mailBodyHtml,
                 text: mailBodyText,
@@ -443,15 +440,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
               value={ccListInput}
               onChange={(event) => setCcListInput(event.target.value)}
               placeholder={"cc1@gmail.com\ncc2@gmail.com"}
-            />
-          </label>
-          <label className="field">
-            <span>Bcc（任意）</span>
-            <textarea
-              rows={3}
-              value={bccListInput}
-              onChange={(event) => setBccListInput(event.target.value)}
-              placeholder={"bcc1@gmail.com\nbcc2@gmail.com"}
             />
           </label>
         </div>
