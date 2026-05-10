@@ -730,7 +730,7 @@ function htmlToPlainText(html: string) {
     .trim();
 }
 
-function buildPayloadPdfAttachment(payload: RequestPayload): BinaryAttachment | null {
+function buildPayloadLines(payload: RequestPayload): string[] {
   const subject = typeof payload.subject === "string" ? payload.subject.trim() : "";
   const textBodyCandidates = [payload.text, payload.message, payload.body];
   const textBody = textBodyCandidates.find(
@@ -739,9 +739,9 @@ function buildPayloadPdfAttachment(payload: RequestPayload): BinaryAttachment | 
   const htmlBody = typeof payload.html === "string" ? payload.html.trim() : "";
   const body = textBody?.trim() || (htmlBody ? htmlToPlainText(htmlBody) : "");
 
-  if (!subject && !body) return null;
-
-  const lines = [
+  if (!subject && !body) return [];
+  
+  return [
     subject ? `件名: ${subject}` : "",
     subject && body ? "" : "",
     body,
@@ -749,7 +749,12 @@ function buildPayloadPdfAttachment(payload: RequestPayload): BinaryAttachment | 
     .filter(Boolean)
     .join("\n")
     .split(/\r?\n/);
+}
 
+function buildPayloadPdfAttachment(payload: RequestPayload): BinaryAttachment | null {
+  const lines = buildPayloadLines(payload);
+  if (!lines.length) return null;
+  
   return {
     filename: "fax-content.pdf",
     mimeType: "application/pdf",
@@ -1124,7 +1129,12 @@ export async function POST(request: Request) {
   } else {
     const inlineImageAttachment = await buildInlineImageAttachment(payload);
     if (inlineImageAttachment) {
-      pdfFile = await ensurePdfAttachment(inlineImageAttachment);
+      const inlineMimeType = inlineImageAttachment.mimeType.toLowerCase();
+      if (inlineMimeType === "image/jpeg" || inlineMimeType === "image/jpg") {
+        pdfFile = await ensurePdfAttachment(inlineImageAttachment);
+      } else {
+        pdfFile = buildPayloadPdfAttachment(payload);
+      }
     } else {
       pdfFile = buildPayloadPdfAttachment(payload);
     }
