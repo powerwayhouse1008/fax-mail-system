@@ -678,21 +678,29 @@ function createJpegPdf(imageBinary: Buffer) {
 `, "ascii"),
     Buffer.from(`2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
 `, "ascii"),
-    Buffer.from(`3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >> endobj
-`, "ascii"),
-    Buffer.from(`4 0 obj << /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageLength} >> stream
-`, "ascii"),
-    imageBinary,
-    Buffer.from(`
+    Buffer.from(
+      `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >> endobj
+`,
+      "ascii",
+    ),
+    Buffer.concat([
+      Buffer.from(
+        `4 0 obj << /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageLength} >> stream
+`,
+        "ascii",
+      ),
+      imageBinary,
+      Buffer.from(`
 endstream endobj
 `, "ascii"),
+       ]),
     Buffer.from(`5 0 obj << /Length ${contentLength} >> stream
 ${contentStream}
 endstream endobj
 `, "ascii"),
   ];
 
-   let output = Buffer.from(`%PDF-1.4
+    let output = Buffer.from(`%PDF-1.4
 `, "ascii");
   const offsets = [0];
   for (const obj of objects) {
