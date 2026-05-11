@@ -1307,57 +1307,18 @@ export async function POST(request: Request) {
           facsimile.facsimileId,
           pdfFile,
         );
-        const transmission = await transmitFacsimile(
-          baseUrl,
-          apiToken,
-          facsimile.facsimileId,
-        );
- const finalTransmission = await pollTransmissionUntilFinalized(
-          baseUrl,
-          apiToken,
-          facsimile.facsimileId,
-        );
-        const deliveredCount = finalTransmission.stats["送達"] ?? 0;
-        const hasFailures =
-          (finalTransmission.stats["不達"] ?? 0) > 0 ||
-          (finalTransmission.stats["エラー"] ?? 0) > 0;
-        const fullyDelivered =
-          finalTransmission.completed &&
-          !finalTransmission.timedOut &&
-          !hasFailures &&
-          deliveredCount === finalTransmission.totalCount;
-
-        if (!fullyDelivered) {
-          const timeoutMessage = finalTransmission.timedOut
-            ? "確定待ちがタイムアウトしました。"
-            : "";
-          const statusMessage = `最終ステータス=${JSON.stringify(finalTransmission.stats)}`;
-          results.push({
-            to: target.original,
-            success: false,
-            error: [timeoutMessage, statusMessage].filter(Boolean).join(" "),
-            raw: {
-              contactList: contactList.raw,
-              facsimile: facsimile.raw,
-              content,
-              transmission,
-              finalTransmission,
-            },
-          });
-        } else {
-          results.push({
-            to: target.original,
-            success: true,
-            id: facsimile.facsimileId,
-            raw: {
-              contactList: contactList.raw,
-              facsimile: facsimile.raw,
-              content,
-              transmission,
-              finalTransmission,
-            },
-          });
-        }
+        const transmission = await transmitFacsimile(baseUrl, apiToken, facsimile.facsimileId);
+        results.push({
+          to: target.original,
+          success: true,
+          id: facsimile.facsimileId,
+          raw: {
+            contactList: contactList.raw,
+            facsimile: facsimile.raw,
+            content,
+            transmission,
+          },
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : "不明なエラー";
         results.push({
