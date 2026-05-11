@@ -5,18 +5,29 @@ const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
 const allowedDomain = process.env.AUTH_ALLOWED_EMAIL_DOMAIN;
 const tenantIssuer = `https://login.microsoftonline.com/${tenantId ?? "common"}/v2.0`;
 const redirectProxyUrl = process.env.AUTH_REDIRECT_PROXY_URL;
+const microsoftClientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID;
+const microsoftClientSecret = process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET;
 
+const microsoftProvider =
+  microsoftClientId && microsoftClientSecret
+    ? [
+        AzureAD({
+          id: "microsoft-entra-id",
+          clientId: microsoftClientId,
+          clientSecret: microsoftClientSecret,
+          issuer: tenantIssuer,
+          ...(redirectProxyUrl ? { redirectProxyUrl } : {}),
+        }),
+      ]
+    : [];
+
+if (!microsoftProvider.length) {
+  console.warn("[auth] Microsoft Entra ID provider is disabled due to missing credentials");
+}
 export const authConfig: NextAuthConfig = {
   trustHost: true,
   session: { strategy: "jwt" },
-  providers: [
-    AzureAD({
-      clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID ?? "",
-      clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET ?? "",
-      issuer: tenantIssuer,
-       ...(redirectProxyUrl ? { redirectProxyUrl } : {}),
-    }),
-  ],
+ providers: microsoftProvider,
   callbacks: {
     async jwt({ token, profile }) {
       if (profile) {
@@ -27,7 +38,7 @@ export const authConfig: NextAuthConfig = {
       return token;
     },
     async signIn({ account, profile }) {
-      if (account?.provider !== "azure-ad") {
+       if (account?.provider !== "microsoft-entra-id") {
         return false;
       }
 
