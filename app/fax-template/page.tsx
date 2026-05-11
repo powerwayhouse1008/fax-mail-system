@@ -684,21 +684,19 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
         <section className="fax-party">
           <div>
             <strong>TO:</strong> {content.to}
-          </div>
-           {content.faxNumber?.trim() ? (
-            <div>
-              <strong>FAX:</strong> {content.faxNumber}
-            </div>
-          ) : null}
+          {content.faxNumber?.trim() ? (
+              <div>
+                <strong>FAX:</strong> {content.faxNumber}
+              </div>
+            ) : null}
           </div>
           <div>
            <strong>FROM:</strong> {content.from}
-          </div>
-           {content.recipientEmails?.trim() ? (
-            <div>
-              <strong>Gmail配信先:</strong> {content.recipientEmails}
-            </div>
-          ) : null}
+            {content.recipientEmails?.trim() ? (
+              <div>
+                <strong>Gmail配信先:</strong> {content.recipientEmails}
+              </div>
+            ) : null}
           </div>
         </section>
 
