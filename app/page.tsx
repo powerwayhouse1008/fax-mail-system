@@ -56,7 +56,7 @@ export default function HomePage() {
    const handleMicrosoftLogin = async () => {
     setMicrosoftLoading(true);
     const nextUrl = new URLSearchParams(window.location.search).get("next") || "/dashboard";
-     await signIn("microsoft-entra-id", { redirectTo: nextUrl });
+      await signIn("microsoft-entra-id", { callbackUrl: nextUrl });
     setMicrosoftLoading(false);
   };
 
