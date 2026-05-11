@@ -7,6 +7,8 @@ const DISALLOWED_MAPPING_COLUMN_KEYS = new Set(["use_print_header"]);
 const DISALLOWED_PRINT_HEADER_VALUES = new Set(["use_print_header"]);
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 const MAX_RETRY_ATTEMPTS = 5;
+const TRANSMISSION_POLL_INTERVAL_MS = 10_000;
+const TRANSMISSION_POLL_TIMEOUT_MS = 600_000;
 const faxPattern = /^[0-9+\-()\s]{6,30}$/;
 
 const API_PATH_CONTACT_LIST = "/api/v1/contact_lists";
@@ -66,6 +68,7 @@ type SendResult =
       error: string;
       raw?: unknown;
     };
+type TransmissionRow = Record<string, string>;
 
 type AuthHeader = Record<string, string>;
 
@@ -1082,6 +1085,125 @@ async function transmitFacsimile(
 
   return response.data;
 }
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      values.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  values.push(current);
+  return values.map((value) => value.trim());
+}
+
+function parseTransmissionCsv(text: string) {
+  const lines = text
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return [];
+
+  const headers = parseCsvLine(lines[0]);
+  return lines.slice(1).map<TransmissionRow>((line) => {
+    const columns = parseCsvLine(line);
+    return headers.reduce<TransmissionRow>((acc, header, idx) => {
+      acc[header] = columns[idx] ?? "";
+      return acc;
+    }, {});
+  });
+}
+
+function isFinalizedTransmission(row: TransmissionRow) {
+  return Boolean((row["確定日時"] || "").trim());
+}
+
+function summarizeTransmissionStatus(rows: TransmissionRow[]) {
+  return rows.reduce<Record<string, number>>((acc, row) => {
+    const status = (row["ステータス"] || "").trim() || "UNKNOWN";
+    acc[status] = (acc[status] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+async function fetchTransmissionCsv(
+  baseUrl: string,
+  apiToken: string,
+  facsimileId: number | string,
+) {
+  const url = buildUrl(baseUrl, `${API_PATH_FACSIMILES}/${facsimileId}/transmission`);
+  const response = await callWithAuthFallback(url, apiToken, (authHeader) => ({
+    method: "GET",
+    headers: {
+      Accept: "text/csv",
+      ...authHeader,
+    },
+  }));
+
+  if (!response.ok) {
+    throw new Error(`送信結果取得失敗: ${extractErrorMessage(response)}`);
+  }
+
+  if (typeof response.data === "string") return response.data;
+  if (response.rawText) return response.rawText;
+  return "";
+}
+
+async function pollTransmissionUntilFinalized(
+  baseUrl: string,
+  apiToken: string,
+  facsimileId: number | string,
+) {
+  const start = Date.now();
+
+  while (true) {
+    const csvText = await fetchTransmissionCsv(baseUrl, apiToken, facsimileId);
+    const rows = parseTransmissionCsv(csvText);
+    const finalizedRows = rows.filter(isFinalizedTransmission);
+    const allFinalized = rows.length > 0 && finalizedRows.length === rows.length;
+
+    if (allFinalized) {
+      return {
+        completed: true,
+        timedOut: false,
+        rows,
+        finalizedCount: finalizedRows.length,
+        totalCount: rows.length,
+        stats: summarizeTransmissionStatus(rows),
+      };
+    }
+
+    if (Date.now() - start >= TRANSMISSION_POLL_TIMEOUT_MS) {
+      return {
+        completed: false,
+        timedOut: true,
+        rows,
+        finalizedCount: finalizedRows.length,
+        totalCount: rows.length,
+        stats: summarizeTransmissionStatus(rows),
+      };
+    }
+
+    await sleep(TRANSMISSION_POLL_INTERVAL_MS);
+  }
+}
 
 export async function POST(request: Request) {
   const apiToken = readEnv(
@@ -1190,18 +1312,52 @@ export async function POST(request: Request) {
           apiToken,
           facsimile.facsimileId,
         );
+ const finalTransmission = await pollTransmissionUntilFinalized(
+          baseUrl,
+          apiToken,
+          facsimile.facsimileId,
+        );
+        const deliveredCount = finalTransmission.stats["送達"] ?? 0;
+        const hasFailures =
+          (finalTransmission.stats["不達"] ?? 0) > 0 ||
+          (finalTransmission.stats["エラー"] ?? 0) > 0;
+        const fullyDelivered =
+          finalTransmission.completed &&
+          !finalTransmission.timedOut &&
+          !hasFailures &&
+          deliveredCount === finalTransmission.totalCount;
 
-        results.push({
-          to: target.original,
-          success: true,
-          id: facsimile.facsimileId,
-          raw: {
-            contactList: contactList.raw,
-            facsimile: facsimile.raw,
-            content,
-            transmission,
-          },
-        });
+        if (!fullyDelivered) {
+          const timeoutMessage = finalTransmission.timedOut
+            ? "確定待ちがタイムアウトしました。"
+            : "";
+          const statusMessage = `最終ステータス=${JSON.stringify(finalTransmission.stats)}`;
+          results.push({
+            to: target.original,
+            success: false,
+            error: [timeoutMessage, statusMessage].filter(Boolean).join(" "),
+            raw: {
+              contactList: contactList.raw,
+              facsimile: facsimile.raw,
+              content,
+              transmission,
+              finalTransmission,
+            },
+          });
+        } else {
+          results.push({
+            to: target.original,
+            success: true,
+            id: facsimile.facsimileId,
+            raw: {
+              contactList: contactList.raw,
+              facsimile: facsimile.raw,
+              content,
+              transmission,
+              finalTransmission,
+            },
+          });
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "不明なエラー";
         results.push({
