@@ -11,12 +11,7 @@ const protectedPaths = [
   "/business-card-upload",
   "/admin",
 ];
-const oauthSessionCookieNames = [
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-  "next-auth.session-token",
-  "__Secure-next-auth.session-token",
-];
+
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const needsAuth = protectedPaths.some((path) => pathname.startsWith(path));
@@ -33,13 +28,6 @@ export async function middleware(request: NextRequest) {
     }
   } catch (error) {
     console.error("[middleware] Failed to parse OAuth token", error);
-  }
-
-  const hasOauthSessionCookie = oauthSessionCookieNames.some((cookieName) =>
-    Boolean(request.cookies.get(cookieName)?.value),
-  );
-  if (hasOauthSessionCookie) {
-    return NextResponse.next();
   }
 
   const legacyToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
