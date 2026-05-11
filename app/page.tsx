@@ -1,11 +1,25 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
 export default function HomePage() {
   const router = useRouter();
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nextUrl = params.get("next") || "/dashboard";
+
+    const checkSession = async () => {
+      const response = await fetch("/api/auth/session", { cache: "no-store" });
+      if (response.ok) {
+        router.replace(nextUrl);
+      }
+    };
+
+    checkSession();
+  }, [router]);
   const [error, setError] = useState("");
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [microsoftLoading, setMicrosoftLoading] = useState(false);
@@ -42,7 +56,7 @@ export default function HomePage() {
    const handleMicrosoftLogin = async () => {
     setMicrosoftLoading(true);
     const nextUrl = new URLSearchParams(window.location.search).get("next") || "/dashboard";
-    await signIn("microsoft-entra-id", { callbackUrl: nextUrl });
+     await signIn("microsoft-entra-id", { redirectTo: nextUrl });
     setMicrosoftLoading(false);
   };
 
