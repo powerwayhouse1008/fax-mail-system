@@ -2,6 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 
 const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
+const allowPersonalMicrosoftAccount = process.env.AUTH_MICROSOFT_ALLOW_PERSONAL_ACCOUNT === "true";
 const allowedDomain = process.env.AUTH_ALLOWED_EMAIL_DOMAIN;
 const redirectProxyUrl = process.env.AUTH_REDIRECT_PROXY_URL;
 const microsoftClientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID;
@@ -10,14 +11,18 @@ const microsoftClientSecret = process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET;
 const microsoftProvider =
   microsoftClientId && microsoftClientSecret
     ? [
-        MicrosoftEntraID({
+        (() => {
+          const issuerTenant = allowPersonalMicrosoftAccount ? "common" : tenantId;
+
+          return MicrosoftEntraID({
           id: "microsoft-entra-id",
           clientId: microsoftClientId,
           clientSecret: microsoftClientSecret,
-           ...(tenantId ? { issuer: `https://login.microsoftonline.com/${tenantId}/v2.0` } : {}),
+            ...(issuerTenant ? { issuer: `https://login.microsoftonline.com/${issuerTenant}/v2.0` } : {}),
           authorization: { params: { prompt: "select_account" } },
           ...(redirectProxyUrl ? { redirectProxyUrl } : {}),
-        }),
+         });
+        })(),
       ]
     : [];
 
