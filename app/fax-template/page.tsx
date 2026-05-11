@@ -108,6 +108,26 @@ const channelLabels: Record<string, string> = {
   fax: "FAX一括送信",
   gmail: "Gmail配信",
 };
+const HOUR_OPTIONS = Array.from({ length: 13 }, (_, index) => String(index + 8).padStart(2, "0"));
+const MINUTE_OPTIONS = ["00", "30"];
+
+const normalizeDateForInput = (value: string) => {
+  if (!value) {
+    return "";
+  }
+  return value.replaceAll("/", "-");
+};
+
+const parsePreferredTime = (value: string) => {
+  const match = value.match(/(\d{1,2})\D+(\d{1,2})/);
+  if (!match) {
+    return { hour: "", minute: "" };
+  }
+  return {
+    hour: match[1].padStart(2, "0"),
+    minute: match[2].padStart(2, "0"),
+  };
+};
 const faxTemplateContent: FaxTemplateContent = {
   to: "有限会社 栄商事 御中 / ご担当者様",
   faxNumber: "03-1234-5678",
@@ -518,16 +538,43 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
             <label className="field">
               <span>内見希望日</span>
               <input
-                value={content.preferredDate}
+                type="date"
+                value={normalizeDateForInput(content.preferredDate)}
                 onChange={(e) => updateField("preferredDate", e.target.value)}
               />
             </label>
             <label className="field">
               <span>内見希望時間</span>
-              <input
-                value={content.preferredTime}
-                onChange={(e) => updateField("preferredTime", e.target.value)}
-              />
+              <div style={{ display: "flex", gap: "8px" }}>
+                <select
+                  value={parsePreferredTime(content.preferredTime).hour}
+                  onChange={(e) => {
+                    const minute = parsePreferredTime(content.preferredTime).minute || "00";
+                    updateField("preferredTime", `${e.target.value} 時 ${minute} 分`);
+                  }}
+                >
+                  <option value="">時</option>
+                  {HOUR_OPTIONS.map((hour) => (
+                    <option key={hour} value={hour}>
+                      {hour}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={parsePreferredTime(content.preferredTime).minute}
+                  onChange={(e) => {
+                    const hour = parsePreferredTime(content.preferredTime).hour || "08";
+                    updateField("preferredTime", `${hour} 時 ${e.target.value} 分`);
+                  }}
+                >
+                  <option value="">分</option>
+                  {MINUTE_OPTIONS.map((minute) => (
+                    <option key={minute} value={minute}>
+                      {minute}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </label>
             <label className="field field-full">
               <span>挨拶文</span>
