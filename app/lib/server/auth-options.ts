@@ -38,11 +38,13 @@ export const authConfig: NextAuthConfig = {
         (profileRecord?.preferred_username as string | undefined) ??
         "";
 
-      if (tenantId && tid !== tenantId) {
+       if (tenantId && tid && tid !== tenantId) {
+        console.warn("[auth] Tenant mismatch", { expected: tenantId, received: tid });
         return false;
       }
 
       if (allowedDomain && email && !email.toLowerCase().endsWith(`@${allowedDomain.toLowerCase()}`)) {
+        console.warn("[auth] Email domain mismatch", { expected: allowedDomain, received: email });
         return false;
       }
 
