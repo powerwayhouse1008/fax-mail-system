@@ -130,8 +130,8 @@ const parsePreferredTime = (value: string) => {
 };
 const faxTemplateContent: FaxTemplateContent = {
   to: "有限会社 栄商事 御中 / ご担当者様",
-  faxNumber: "03-1234-5678",
-  recipientEmails: "example-a@gmail.com, example-b@gmail.com",
+  faxNumber: "",
+  recipientEmails: "",
   from: "株式会社パワーウェイ / マイ",
    cc: "",
   bcc: "",
@@ -674,7 +674,7 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
             <header className="fax-header">
               <h1>見送付状</h1>
               <div className="meta">
-                <p>送信日時：26/03/31</p>
+                <p>送信日時：{sentAtDate}</p>
                 <p>送信枚数：1 枚</p>
                 <p>配信種別：{channelLabel}</p>
               </div>
@@ -685,14 +685,20 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
           <div>
             <strong>TO:</strong> {content.to}
           </div>
-          <div>
-            <strong>FAX:</strong> {content.faxNumber}
+           {content.faxNumber?.trim() ? (
+            <div>
+              <strong>FAX:</strong> {content.faxNumber}
+            </div>
+          ) : null}
           </div>
           <div>
            <strong>FROM:</strong> {content.from}
           </div>
-          <div>
-            <strong>Gmail配信先:</strong> {content.recipientEmails || "（なし）"}
+           {content.recipientEmails?.trim() ? (
+            <div>
+              <strong>Gmail配信先:</strong> {content.recipientEmails}
+            </div>
+          ) : null}
           </div>
         </section>
 
