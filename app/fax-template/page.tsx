@@ -504,16 +504,8 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
               <span>FROM</span>
               <input value={content.from} onChange={(e) => updateField("from", e.target.value)} />
             </label>
-            <label>
-              <label className="field field-full">
-              <span>Gmail送信先リスト（カンマ区切り）</span>
-              <input
-                value={content.recipientEmails}
-                onChange={(e) => updateField("recipientEmails", e.target.value)}
-                placeholder="a@gmail.com, b@gmail.com"
-              />
-            </label>
-              連絡事項
+            <label className="field">
+              <span>連絡事項</span>
               <input value={content.contact} onChange={(e) => updateField("contact", e.target.value)} />
             </label>
             <label className="field">
