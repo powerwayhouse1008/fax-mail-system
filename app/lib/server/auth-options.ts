@@ -5,8 +5,17 @@ const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
 const allowPersonalMicrosoftAccount = process.env.AUTH_MICROSOFT_ALLOW_PERSONAL_ACCOUNT === "true";
 const allowedDomain = process.env.AUTH_ALLOWED_EMAIL_DOMAIN;
 const redirectProxyUrl = process.env.AUTH_REDIRECT_PROXY_URL;
-const microsoftClientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID;
-const microsoftClientSecret = process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET;
+const microsoftClientId =
+  process.env.AUTH_MICROSOFT_ENTRA_ID_ID ??
+  process.env.AUTH_MICROSOFT_CLIENT_ID ??
+  process.env.MICROSOFT_CLIENT_ID;
+
+const microsoftClientSecret =
+  process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET ??
+  process.env.AUTH_MICROSOFT_CLIENT_SECRET ??
+  process.env.MICROSOFT_CLIENT_SECRET;
+
+const issuerTenant = allowPersonalMicrosoftAccount ? "common" : tenantId;
 
 const microsoftProvider =
   microsoftClientId && microsoftClientSecret
@@ -18,7 +27,9 @@ const microsoftProvider =
           id: "microsoft-entra-id",
           clientId: microsoftClientId,
           clientSecret: microsoftClientSecret,
-            ...(issuerTenant ? { issuer: `https://login.microsoftonline.com/${issuerTenant}/v2.0` } : {}),
+             ...(issuerTenant
+            ? { issuer: `https://login.microsoftonline.com/${issuerTenant}/v2.0` }
+            : {}),
           authorization: { params: { prompt: "select_account" } },
           ...(redirectProxyUrl ? { redirectProxyUrl } : {}),
          });
@@ -27,12 +38,15 @@ const microsoftProvider =
     : [];
 
 if (!microsoftProvider.length) {
-  console.warn("[auth] Microsoft Entra ID provider is disabled due to missing credentials");
+  console.warn("[auth] Microsoft Entra ID provider is disabled due to missing credentials", {
+    hasClientId: Boolean(microsoftClientId),
+    hasClientSecret: Boolean(microsoftClientSecret),
+  });
 }
 export const authConfig: NextAuthConfig = {
   trustHost: true,
   session: { strategy: "jwt" },
- providers: microsoftProvider,
+  providers: microsoftProvider,
   callbacks: {
     async jwt({ token, profile }) {
       if (profile) {
@@ -43,7 +57,7 @@ export const authConfig: NextAuthConfig = {
       return token;
     },
     async signIn({ account, profile }) {
-       if (account?.provider !== "microsoft-entra-id") {
+        if (account?.provider !== "microsoft-entra-id") {
         return false;
       }
 
@@ -54,14 +68,8 @@ export const authConfig: NextAuthConfig = {
         (profileRecord?.preferred_username as string | undefined) ??
         "";
 
-        // NOTE:
-      // Some Entra tenants/accounts return values that are inconsistent with
-      // strict client-side expectations (B2B guests, aliases, masked emails).
-      // Rejecting login here can cause a silent redirect loop back to `/`.
-      // We keep the checks as warnings to avoid false negatives in production.
-      if (tenantId && tid && tid !== tenantId) {
+         if (!allowPersonalMicrosoftAccount && tenantId && tid && tid !== tenantId) {
         console.warn("[auth] Tenant mismatch", { expected: tenantId, received: tid });
-      
       }
 
       if (allowedDomain && email && !email.toLowerCase().endsWith(`@${allowedDomain.toLowerCase()}`)) {
