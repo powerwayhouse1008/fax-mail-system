@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 import AuthGuard from "../components/auth-guard";
 import { useEffect, useMemo, useState } from "react";
 import type { SessionUser } from "../lib/auth";
@@ -74,7 +75,7 @@ export default function DashboardPage() {
 
 const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/");
+    await signOut({ callbackUrl: "/", redirect: true });
   };
 
   return (
