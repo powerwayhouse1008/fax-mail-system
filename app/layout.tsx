@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,7 +14,17 @@ export default function RootLayout({
 }>) {
   return (
      <html lang="ja">
-      <body>{children}</body>
+      <body>
+        <div className="fixed left-4 top-4 z-50">
+          <Link
+            href="/"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700"
+          >
+            ← Trang chủ
+          </Link>
+        </div>
+        {children}
+      </body>
     </html>
   );
 }
