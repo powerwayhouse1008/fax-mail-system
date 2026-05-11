@@ -64,7 +64,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const [mailSubject, setMailSubject] = useState("FAX Mail System からの送信テスト");
   const [mailBodyHtml, setMailBodyHtml] = useState("<p>FAX Mail System からの送信テストです。</p>");
   const [mailBodyText, setMailBodyText] = useState("FAX Mail System からの送信テストです。");
-  const [ccListInput, setCcListInput] = useState("");
   const [attachments, setAttachments] = useState<AttachmentPayload[]>([]);
   const [faxDraftContent, setFaxDraftContent] = useState<FaxTemplateContent>({});
   const [uploadedCard, setUploadedCard] = useState<{
@@ -84,7 +83,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   }, [searchParams?.faxList, searchParams?.gmailList]);
   const faxNumbers = useMemo(() => cleanList(faxListInput), [faxListInput]);
   const gmailAddresses = useMemo(() => cleanList(gmailListInput), [gmailListInput]);
-  const ccAddresses = useMemo(() => cleanList(ccListInput), [ccListInput]);
   const maxLength = Math.max(faxNumbers.length, gmailAddresses.length);
 
     useEffect(() => {
@@ -122,9 +120,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
         if (subject) {
           setMailSubject(subject);
-        }
-        if (draftContent.cc?.trim()) {
-          setCcListInput(draftContent.cc);
         }
 
         if (isGmailChannel) {
@@ -312,7 +307,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
               },
               body: JSON.stringify({
                 emails: gmailAddresses,
-                cc: ccAddresses,
                 subject: mailSubject,
                 html: mailBodyHtml,
                 text: mailBodyText,
@@ -433,15 +427,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
           </label>
         </div>
  <div className="recipient-grid">
-          <label className="field">
-            <span>Cc（任意）</span>
-            <textarea
-              rows={3}
-              value={ccListInput}
-              onChange={(event) => setCcListInput(event.target.value)}
-              placeholder={"cc1@gmail.com\ncc2@gmail.com"}
-            />
-          </label>
+          
         </div>
         <label className="field">
           <span>件名</span>
