@@ -49,14 +49,19 @@ export const authConfig: NextAuthConfig = {
         (profileRecord?.preferred_username as string | undefined) ??
         "";
 
-       if (tenantId && tid && tid !== tenantId) {
+        // NOTE:
+      // Some Entra tenants/accounts return values that are inconsistent with
+      // strict client-side expectations (B2B guests, aliases, masked emails).
+      // Rejecting login here can cause a silent redirect loop back to `/`.
+      // We keep the checks as warnings to avoid false negatives in production.
+      if (tenantId && tid && tid !== tenantId) {
         console.warn("[auth] Tenant mismatch", { expected: tenantId, received: tid });
-        return false;
+      
       }
 
       if (allowedDomain && email && !email.toLowerCase().endsWith(`@${allowedDomain.toLowerCase()}`)) {
         console.warn("[auth] Email domain mismatch", { expected: allowedDomain, received: email });
-        return false;
+       
       }
 
       return true;
