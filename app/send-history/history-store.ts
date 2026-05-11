@@ -7,6 +7,7 @@ export type SendHistoryItem = {
   recipient: string;
   subject: string;
   sentAt: string;
+  notifiedAt: string;
   status: SendStatus;
 };
 
@@ -68,18 +69,24 @@ export const loadSendHistory = (): SendHistoryItem[] => {
   }
 
   try {
-    const parsed = JSON.parse(raw) as SendHistoryItem[];
+    const parsed = JSON.parse(raw) as Array<SendHistoryItem & { notifiedAt?: string }>;
     if (!Array.isArray(parsed)) {
       return [];
     }
    const retentionCutoff = createRetentionCutoff();
-    const sanitized = parsed.filter(
+    const sanitized = parsed
+      .map((item) => ({
+        ...item,
+        notifiedAt: typeof item?.notifiedAt === "string" ? item.notifiedAt : item.sentAt,
+      }))
+      .filter(
       (item) =>
         typeof item?.id === "string" &&
         (item.channel === "fax" || item.channel === "gmail") &&
         typeof item.recipient === "string" &&
         typeof item.subject === "string" &&
         typeof item.sentAt === "string" &&
+        typeof item.notifiedAt === "string" &&
         (item.status === "success" || item.status === "failed" || item.status === "sending") &&
         (() => {
           const sentAtDate = parseSentAt(item.sentAt);
@@ -106,12 +113,14 @@ export const appendSendHistory = (
 
   const now = new Date();
   const sentAt = formatDateTime(now);
+  const notifiedAt = sentAt;
   const mappedEntries: SendHistoryItem[] = entries.map((entry) => ({
     id: uniqueId(entry.channel, now),
     channel: entry.channel,
     recipient: entry.recipient,
     subject: entry.subject?.trim() || "（件名なし）",
     sentAt,
+    notifiedAt,
     status: entry.status,
   }));
 
