@@ -62,14 +62,14 @@ export default function SendHistoryPage() {
                 <th>チャネル</th>
                 <th>送信先</th>
                 <th>件名・タイトル</th>
-                <th>送信日時</th>
-                <th>ステータス</th>
+                 <th>送信時刻</th>
+                <th>通知（時刻付き）</th>
               </tr>
             </thead>
             <tbody>
               {historyItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>まだ送信履歴がありません。</td>   
+                   <td colSpan={6}>まだ送信履歴がありません。</td>   
                 </tr>
               ) : (
                 historyItems.map((item) => (
@@ -80,7 +80,9 @@ export default function SendHistoryPage() {
                     <td>{item.subject}</td>
                     <td>{item.sentAt}</td>
                     <td>
-                      <span className={`status-chip status-${item.status}`}>{statusLabel[item.status]}</span>
+                      <span className={`status-chip status-${item.status}`}>
+                        {statusLabel[item.status]} ({item.notifiedAt})
+                      </span>
                     </td>
                   </tr>
                 ))
