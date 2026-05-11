@@ -508,17 +508,9 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
           </div>
         ) : (
           <div className="editor-grid">
-            <label className="field">
-              <span>TO</span>
-              <input value={content.to} onChange={(e) => updateField("to", e.target.value)} />
-            </label>
-            <label className="field">
-              <span>FAX番号</span>
-              <input
-                value={content.faxNumber}
-                onChange={(e) => updateField("faxNumber", e.target.value)}
-                placeholder="03-1234-5678"
-              />
+         <label className="field field-required">
+              <span className="field-required-label">TO</span>
+              <input required value={content.to} onChange={(e) => updateField("to", e.target.value)} />
             </label>
             <label className="field">
               <span>FROM</span>
@@ -528,25 +520,28 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
               <span>連絡事項</span>
               <input value={content.contact} onChange={(e) => updateField("contact", e.target.value)} />
             </label>
-            <label className="field">
-              <span>物件名 / 室</span>
+            required
+             <label className="field field-required">
+              <span className="field-required-label">物件名 / 室</span>
               <input
                 value={content.propertyName}
                 onChange={(e) => updateField("propertyName", e.target.value)}
               />
             </label>
-            <label className="field">
-              <span>内見希望日</span>
+            <label className="field field-required">
+              <span className="field-required-label">内見希望日</span>
               <input
                 type="date"
+                required
                 value={normalizeDateForInput(content.preferredDate)}
                 onChange={(e) => updateField("preferredDate", e.target.value)}
               />
             </label>
-            <label className="field">
-              <span>内見希望時間</span>
+            <label className="field field-required field-time-emphasis">
+              <span className="field-required-label">内見希望時間</span>
               <div style={{ display: "flex", gap: "8px" }}>
                 <select
+                  required
                   value={parsePreferredTime(content.preferredTime).hour}
                   onChange={(e) => {
                     const minute = parsePreferredTime(content.preferredTime).minute || "00";
@@ -561,6 +556,7 @@ const handleGmailAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>)
                   ))}
                 </select>
                 <select
+                  required
                   value={parsePreferredTime(content.preferredTime).minute}
                   onChange={(e) => {
                     const hour = parsePreferredTime(content.preferredTime).hour || "08";
