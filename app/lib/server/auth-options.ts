@@ -1,9 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
-import AzureAD from "next-auth/providers/azure-ad";
+import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 
 const tenantId = process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID;
 const allowedDomain = process.env.AUTH_ALLOWED_EMAIL_DOMAIN;
-const tenantIssuer = `https://login.microsoftonline.com/${tenantId ?? "common"}/v2.0`;
 const redirectProxyUrl = process.env.AUTH_REDIRECT_PROXY_URL;
 const microsoftClientId = process.env.AUTH_MICROSOFT_ENTRA_ID_ID;
 const microsoftClientSecret = process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET;
@@ -11,11 +10,12 @@ const microsoftClientSecret = process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET;
 const microsoftProvider =
   microsoftClientId && microsoftClientSecret
     ? [
-        AzureAD({
+        MicrosoftEntraID({
           id: "microsoft-entra-id",
           clientId: microsoftClientId,
           clientSecret: microsoftClientSecret,
-          issuer: tenantIssuer,
+           ...(tenantId ? { issuer: `https://login.microsoftonline.com/${tenantId}/v2.0` } : {}),
+          authorization: { params: { prompt: "select_account" } },
           ...(redirectProxyUrl ? { redirectProxyUrl } : {}),
         }),
       ]
