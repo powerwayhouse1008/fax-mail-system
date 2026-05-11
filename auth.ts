@@ -1,23 +1,7 @@
 import NextAuth from "next-auth";
-import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
+import { authConfig } from "./app/lib/server/auth-options";
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true,
-
+  ...authConfig,
   secret: process.env.AUTH_SECRET,
-
-  providers: [
-    MicrosoftEntraID({
-      clientId: process.env.AUTH_MICROSOFT_ENTRA_ID_ID!,
-      clientSecret: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET!,
-      issuer: process.env.AUTH_MICROSOFT_ENTRA_ID_ISSUER!,
-    }),
-  ],
-
-  pages: {
-    signIn: "/",
-  },
-
-  session: {
-    strategy: "jwt",
-  },
 });
