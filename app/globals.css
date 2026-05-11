@@ -286,13 +286,29 @@ body {
   color: #334155;
   font-weight: 600;
 }
+.field-required {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 12px;
+  padding: 0.5rem;
+}
 
+.field-required-label {
+  color: #9a3412;
+  font-weight: 800;
+}
+
+.field-required-label::after {
+  content: " *";
+  color: #dc2626;
+}
 .field-full {
   grid-column: 1 / -1;
 }
 
 .field input,
-.field textarea {
+.field textarea,
+.field select {
   width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
@@ -308,10 +324,19 @@ body {
 }
 
 .field input:focus,
-.field textarea:focus {
+.field textarea:focus,
+.field select:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.16);
+}
+.field-time-emphasis .field-required-label {
+  font-size: 1.1rem;
+}
+
+.field-time-emphasis select {
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 .gmail-body-editor {
   min-height: 140px;
