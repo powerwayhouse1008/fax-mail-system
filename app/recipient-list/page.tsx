@@ -220,7 +220,9 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
     drawText("見積送付状", 70, 90, 52, "700");
     drawText(`TO: ${faxDraftContent.to || ""}`, 70, 160);
-    drawText(`FAX: ${faxDraftContent.faxNumber || ""}`, 70, 210);
+    if (faxDraftContent.faxNumber?.trim()) {
+      drawText(`FAX: ${faxDraftContent.faxNumber}`, 70, 210);
+    }
     drawText(`FROM: ${faxDraftContent.from || ""}`, 70, 260);
     drawText(`${faxDraftContent.greeting || ""}`, 70, 330);
     drawText(`${faxDraftContent.request || ""}`, 70, 390);
