@@ -12,7 +12,7 @@ const channelLabel: Record<SendChannel, string> = {
 const statusLabel: Record<SendStatus, string> = {
   success: "送信完了",
   failed: "送信失敗",
-  sending: "送信中",
+  sending: "送信処理中",
 };
 
 export default function SendHistoryPage() {
@@ -32,7 +32,7 @@ export default function SendHistoryPage() {
         <header className="history-header">
           <div>
             <h1>送信履歴管理</h1>
-            <p>FAX と Gmail の送信履歴を一覧で確認できます。</p>
+             <p>FAXは受信側への送達完了後に通知されます。API受付時点では通知完了になりません。</p>
           </div>
           <Link href="/dashboard" className="btn btn-secondary">
             ダッシュボードへ戻る
@@ -81,7 +81,9 @@ export default function SendHistoryPage() {
                     <td>{item.sentAt}</td>
                     <td>
                       <span className={`status-chip status-${item.status}`}>
-                        {statusLabel[item.status]} ({item.notifiedAt})
+                        {item.channel === "fax" && item.status === "sending"
+                          ? "通知待ち（受信側の送信完了待ち）"
+                          : `${statusLabel[item.status]} (${item.notifiedAt})`}
                       </span>
                     </td>
                   </tr>
