@@ -404,8 +404,17 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   return (
     <main className="dashboard-shell">
       <section className="dashboard-card">
-        <h1>順次送信リスト</h1>
-        <p>FAX番号またはGmailアドレスの一覧を入力してください。未入力の項目があっても送信できます。</p>
+        <header className="history-header">
+          <div>
+            <h1>順次送信リスト</h1>
+            <p>FAX番号またはGmailアドレスの一覧を入力してください。未入力の項目があっても送信できます。</p>
+          </div>
+          <div className="history-actions">
+            <Link href="/send-history" className="btn btn-primary">
+              送信履歴管理
+            </Link>
+          </div>
+        </header>
 
         <div className="recipient-grid">
           <label className="field">
