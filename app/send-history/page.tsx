@@ -19,7 +19,10 @@ export default function SendHistoryPage() {
    const [historyItems, setHistoryItems] = useState<SendHistoryItem[]>([]);
 
   useEffect(() => {
-    setHistoryItems(loadSendHistory());
+    const refresh = () => setHistoryItems(syncFaxNotificationStatus());
+    refresh();
+    const intervalId = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   const total = historyItems.length;
