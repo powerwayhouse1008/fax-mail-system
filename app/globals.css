@@ -519,6 +519,11 @@ body {
   margin: 0.4rem 0 0;
   color: #475569;
 }
+.history-actions {
+  display: inline-flex;
+  gap: 0.6rem;
+  align-items: center;
+}
 
 .history-stats {
   display: grid;
@@ -596,7 +601,10 @@ body {
   .history-header {
     flex-direction: column;
   }
-
+.history-actions {
+    width: 100%;
+    flex-direction: column;
+  }
   .history-header .btn {
     width: 100%;
   }
