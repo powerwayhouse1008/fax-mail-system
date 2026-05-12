@@ -113,14 +113,13 @@ export const appendSendHistory = (
 
   const now = new Date();
   const sentAt = formatDateTime(now);
-  const notifiedAt = sentAt;
   const mappedEntries: SendHistoryItem[] = entries.map((entry) => ({
     id: uniqueId(entry.channel, now),
     channel: entry.channel,
     recipient: entry.recipient,
     subject: entry.subject?.trim() || "（件名なし）",
     sentAt,
-    notifiedAt,
+    notifiedAt: entry.channel === "fax" && entry.status === "sending" ? "--" : sentAt,
     status: entry.status,
   }));
 
