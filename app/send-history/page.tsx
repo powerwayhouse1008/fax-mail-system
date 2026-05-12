@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { loadSendHistory, SendChannel, SendHistoryItem, SendStatus } from "./history-store";
+import { SendChannel, SendHistoryItem, SendStatus, syncFaxNotificationStatus } from "./history-store";
 
 const channelLabel: Record<SendChannel, string> = {
   fax: "FAX",
