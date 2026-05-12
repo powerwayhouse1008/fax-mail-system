@@ -342,7 +342,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
           channel: "fax" as const,
           recipient: faxNumber,
           subject: mailSubject,
-          status: faxFailedRecipients.has(faxNumber) ? ("failed" as const) : ("success" as const),
+          status: faxFailedRecipients.has(faxNumber) ? ("failed" as const) : ("sending" as const),
         })),
         ...gmailAddresses.map((email) => ({
           channel: "gmail" as const,
