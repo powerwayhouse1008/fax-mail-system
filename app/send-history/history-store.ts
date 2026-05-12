@@ -14,6 +14,7 @@ export type SendHistoryItem = {
 const STORAGE_KEY = "send-history-items";
 const MAX_HISTORY_ITEMS = 200;
 const HISTORY_RETENTION_MONTHS = 3;
+const FAX_NOTIFICATION_DELAY_MS = 2 * 60 * 1000;
 
 const padTwoDigits = (value: number) => value.toString().padStart(2, "0");
 
@@ -126,4 +127,40 @@ export const appendSendHistory = (
   const current = loadSendHistory();
   const next = [...mappedEntries, ...current].slice(0, MAX_HISTORY_ITEMS);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+};
+
+export const syncFaxNotificationStatus = (referenceDate: Date = new Date()): SendHistoryItem[] => {
+  const items = loadSendHistory();
+  if (items.length === 0 || typeof window === "undefined") {
+    return items;
+  }
+
+  let changed = false;
+  const updated = items.map((item) => {
+    if (!(item.channel === "fax" && item.status === "sending")) {
+      return item;
+    }
+
+    const sentAtDate = parseSentAt(item.sentAt);
+    if (!sentAtDate) {
+      return item;
+    }
+
+    if (referenceDate.getTime() - sentAtDate.getTime() < FAX_NOTIFICATION_DELAY_MS) {
+      return item;
+    }
+
+    changed = true;
+    return {
+      ...item,
+      status: "success",
+      notifiedAt: formatDateTime(referenceDate),
+    };
+  });
+
+  if (changed) {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  }
+
+  return updated;
 };
