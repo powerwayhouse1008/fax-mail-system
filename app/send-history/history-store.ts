@@ -136,7 +136,7 @@ export const syncFaxNotificationStatus = (referenceDate: Date = new Date()): Sen
   }
 
   let changed = false;
-  const updated = items.map((item) => {
+  const updated: SendHistoryItem[] = items.map((item) => {
     if (!(item.channel === "fax" && item.status === "sending")) {
       return item;
     }
@@ -153,7 +153,7 @@ export const syncFaxNotificationStatus = (referenceDate: Date = new Date()): Sen
     changed = true;
     return {
       ...item,
-      status: "success",
+       status: "success" as SendStatus,
       notifiedAt: formatDateTime(referenceDate),
     };
   });
