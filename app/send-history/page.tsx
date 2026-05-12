@@ -34,9 +34,14 @@ export default function SendHistoryPage() {
             <h1>送信履歴管理</h1>
              <p>FAXは受信側への送達完了後に通知されます。API受付時点では通知完了になりません。</p>
           </div>
-          <Link href="/dashboard" className="btn btn-secondary">
-            ダッシュボードへ戻る
-          </Link>
+          <div className="history-actions">
+            <Link href="/recipient-list" className="btn btn-primary">
+              順次送信リスト
+            </Link>
+            <Link href="/dashboard" className="btn btn-secondary">
+              ダッシュボードへ戻る
+            </Link>
+          </div>
         </header>
 
         <section className="history-stats" aria-label="送信履歴サマリー">
