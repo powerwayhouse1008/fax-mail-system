@@ -1,4 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { readFile, writeFile } from "fs/promises";
+import path from "path";
 import { DEFAULT_USER_ACCOUNTS, type UserAccount } from "../auth";
 
 type UserRow = {
@@ -16,6 +18,7 @@ const normalizeText = (value: string) => value.trim();
 let hasSeededDefaultUsers = false;
 let resolvedUsersTable: string | null = null;
 const LOCAL_HASH_SCHEME = "scrypt_v1";
+const LOCAL_USERS_FILE_PATH = path.join(process.cwd(), "data/users.json");
 
 const normalizeAccounts = (accounts: UserAccount[]) =>
   accounts.map((account) => ({
@@ -81,6 +84,26 @@ function getSupabaseConfig() {
     supabaseUrl,
     serviceRoleKey,
   };
+}
+function hasSupabaseConfig(): boolean {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+  return Boolean(supabaseUrl && serviceRoleKey);
+}
+
+async function readLocalUsersFile(): Promise<UserAccount[]> {
+  try {
+    const raw = await readFile(LOCAL_USERS_FILE_PATH, "utf-8");
+    const parsed = JSON.parse(raw) as UserAccount[];
+    return normalizeAccounts(parsed);
+  } catch {
+    return normalizeAccounts(DEFAULT_USER_ACCOUNTS);
+  }
+}
+
+async function writeLocalUsersFile(users: UserAccount[]): Promise<void> {
+  await writeFile(LOCAL_USERS_FILE_PATH, `${JSON.stringify(users, null, 2)}\n`, "utf-8");
 }
 
 async function supabaseRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -233,7 +256,9 @@ async function seedDefaultUsersIfNeeded(): Promise<void> {
 
 export async function readUsers(): Promise<UserAccount[]> {
   await seedDefaultUsersIfNeeded();
-
+ if (!hasSupabaseConfig()) {
+    return readLocalUsersFile();
+  }
    const data = await withUsersTable((table) =>
     supabaseRequest<UserRow[]>(`/${table}?select=id,username,password_hash,password,name,created_at&order=created_at.asc`),
   );
@@ -249,6 +274,18 @@ export async function createUser(input: {
   const username = normalizeText(input.username);
   const passwordHash = await hashPassword(input.password);
   const name = normalizeText(input.name ?? username) || username;
+  if (!hasSupabaseConfig()) {
+    const users = await readLocalUsersFile();
+    const nextUser: UserAccount = {
+      id: randomBytes(8).toString("hex"),
+      username,
+      password: passwordHash,
+      name,
+      createdAt: new Date().toISOString(),
+    };
+    await writeLocalUsersFile([...users, nextUser]);
+    return;
+  }
   const basePayload = {
     username,
     password_hash: passwordHash,
@@ -291,6 +328,23 @@ export async function updateUser(input: {
   password?: string;
   name?: string;
 }): Promise<void> {
+  if (!hasSupabaseConfig()) {
+    const users = await readLocalUsersFile();
+    const updated = await Promise.all(
+      users.map(async (user) => {
+        if (user.id !== input.id) return user;
+        const nextPassword = input.password ? await hashPassword(input.password) : user.password;
+        return {
+          ...user,
+          username: input.username !== undefined ? normalizeText(input.username) : user.username,
+          name: input.name !== undefined ? normalizeText(input.name) : user.name,
+          password: nextPassword,
+        };
+      }),
+    );
+    await writeLocalUsersFile(updated);
+    return;
+  }
   const payload: Partial<
     Record<"username" | "username_unique" | "username unique" | "password" | "password_hash" | "name", string>
   > = {};
@@ -336,6 +390,11 @@ export async function updateUser(input: {
 }
 
 export async function deleteUser(id: string): Promise<void> {
+   if (!hasSupabaseConfig()) {
+    const users = await readLocalUsersFile();
+    await writeLocalUsersFile(users.filter((user) => user.id !== id));
+    return;
+  }
  await withUsersTable((table) => supabaseRequest<unknown>(`/${table}?id=eq.${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: { Prefer: "return=minimal" },
