@@ -10,19 +10,23 @@ const resolveBucketName = () => {
 };
 
 function getSupabaseConfig() {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+   const rawSupabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
 
-  if (!supabaseUrl || !serviceRoleKey) {
+   if (!rawSupabaseUrl || !serviceRoleKey) {
     throw new Error(
       "Missing Supabase environment variables. Set SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY).",
     );
   }
+ const supabaseUrl = rawSupabaseUrl.trim().replace(/^(["\"])|(["\"])$/g, "").replace(/\/$/, "");
 
+  if (!/^https?:\/\//i.test(supabaseUrl)) {
+    throw new Error("SUPABASE_URL は http:// または https:// で始まる必要があります。");
+  }
   return {
     supabaseUrl,
-    serviceRoleKey,
+    serviceRoleKey: serviceRoleKey.trim(),
   };
 }
 
