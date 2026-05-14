@@ -30,12 +30,9 @@ function getUsersTableCandidates(): string[] {
   const envTable = process.env.SUPABASE_USERS_TABLE?.trim();
   const propertyCode = process.env.SUPABASE_PROPERTY_CODE?.trim();
   const base = [
-    envTable,
-    propertyCode ? `powerway_${propertyCode}` : undefined,
-    "powerway_2026",
-    "powerway_1008",
-    "users",
-  ].filter((value): value is string => Boolean(value));
+  envTable,
+  "users",
+].filter((value): value is string => Boolean(value));
 
   return Array.from(new Set(base));
 }
