@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
-　const fileBuffer = Buffer.from(await file.arrayBuffer());
+  const fileBuffer = await file.arrayBuffer();
   const uploadHeaders = {
     Authorization: `Bearer ${config.serviceRoleKey}`,
     apikey: config.serviceRoleKey,
@@ -127,7 +127,8 @@ export async function POST(request: Request) {
       contentType: file.type || "application/octet-stream",
       filename: file.name,
     });
-  } catch {
-    return NextResponse.json({ error: "アップロード中にエラーが発生しました。" }, { status: 500 });
+   } catch (error) {
+    const detail = error instanceof Error ? error.message : "不明なエラー";
+    return NextResponse.json({ error: `アップロード中にエラーが発生しました。 (${detail})` }, { status: 500 });
   }
 }
