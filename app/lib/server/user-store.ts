@@ -14,6 +14,7 @@ type UserRow = {
 
 const normalizeText = (value: string) => value.trim();
 let hasSeededDefaultUsers = false;
+let resolvedUsersTable: string | null = null;
 const LOCAL_HASH_SCHEME = "scrypt_v1";
 
 const normalizeAccounts = (accounts: UserAccount[]) =>
@@ -24,6 +25,50 @@ const normalizeAccounts = (accounts: UserAccount[]) =>
     name: account.name?.trim() || account.username,
   }));
 
+
+function getUsersTableCandidates(): string[] {
+  const envTable = process.env.SUPABASE_USERS_TABLE?.trim();
+  const propertyCode = process.env.SUPABASE_PROPERTY_CODE?.trim();
+  const base = [
+    envTable,
+    propertyCode ? `powerway_${propertyCode}` : undefined,
+    "powerway_2026",
+    "powerway_1008",
+    "users",
+  ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(base));
+}
+
+function isMissingRelationError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.message.includes("PGRST205") ||
+    error.message.includes('relation "public.') && error.message.includes('" does not exist')
+  );
+}
+
+async function withUsersTable<T>(request: (table: string) => Promise<T>): Promise<T> {
+  const candidates = resolvedUsersTable ? [resolvedUsersTable, ...getUsersTableCandidates()] : getUsersTableCandidates();
+
+  let lastError: unknown;
+  for (const table of Array.from(new Set(candidates))) {
+    try {
+      const result = await request(table);
+      resolvedUsersTable = table;
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (!isMissingRelationError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? new Error(`Users table is not found. Tried: ${getUsersTableCandidates().join(", ")}. Last error: ${lastError.message}`)
+    : new Error("Failed to resolve users table.");
+}
 function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey =
@@ -156,10 +201,10 @@ function verifyLocalPassword(password: string, storedHash: string): boolean {
 async function seedDefaultUsersIfNeeded(): Promise<void> {
   if (hasSeededDefaultUsers) return;
 
-  const countHeader = await supabaseRequest<unknown[]>("/users?select=id", {
+  const countHeader = await withUsersTable((table) => supabaseRequest<unknown[]>(`/${table}?select=id`, {
     method: "GET",
     headers: { Prefer: "count=exact" },
-  });
+  }));
 
   if (countHeader.length > 0) {
     hasSeededDefaultUsers = true;
@@ -180,11 +225,11 @@ async function seedDefaultUsersIfNeeded(): Promise<void> {
     }),
   );
 
-  await supabaseRequest<unknown>("/users", {
+  await withUsersTable((table) => supabaseRequest<unknown>(`/${table}`, {
     method: "POST",
     body: JSON.stringify(defaultRows),
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-  });
+ }));
 
   hasSeededDefaultUsers = true;
 }
@@ -192,8 +237,8 @@ async function seedDefaultUsersIfNeeded(): Promise<void> {
 export async function readUsers(): Promise<UserAccount[]> {
   await seedDefaultUsersIfNeeded();
 
-  const data = await supabaseRequest<UserRow[]>(
-     "/users?select=id,username,password_hash,password,name,created_at&order=created_at.asc",
+   const data = await withUsersTable((table) =>
+    supabaseRequest<UserRow[]>(`/${table}?select=id,username,password_hash,password,name,created_at&order=created_at.asc`),
   );
 
   return normalizeAccounts((data ?? []).map((row) => mapRowToAccount(row)));
@@ -224,11 +269,11 @@ export async function createUser(input: {
   let lastError: unknown;
   for (const variant of variants) {
     try {
-      await supabaseRequest<unknown>("/users", {
+       await withUsersTable((table) => supabaseRequest<unknown>(`/${table}`, {
         method: "POST",
         body: JSON.stringify(variant),
         headers: { Prefer: "return=minimal" },
-      });
+       }));
       return;
     } catch (error) {
       lastError = error;
@@ -276,11 +321,11 @@ export async function updateUser(input: {
   let lastError: unknown;
   for (const variant of variants) {
     try {
-      await supabaseRequest<unknown>(`/users?id=eq.${encodeURIComponent(input.id)}`, {
+      await withUsersTable((table) => supabaseRequest<unknown>(`/${table}?id=eq.${encodeURIComponent(input.id)}`, {
         method: "PATCH",
         body: JSON.stringify(variant),
         headers: { Prefer: "return=minimal" },
-      });
+      }));
       return;
     } catch (error) {
       lastError = error;
@@ -294,8 +339,8 @@ export async function updateUser(input: {
 }
 
 export async function deleteUser(id: string): Promise<void> {
-  await supabaseRequest<unknown>(`/users?id=eq.${encodeURIComponent(id)}`, {
+ await withUsersTable((table) => supabaseRequest<unknown>(`/${table}?id=eq.${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers: { Prefer: "return=minimal" },
-  });
+  }));
 }
