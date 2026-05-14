@@ -3,6 +3,12 @@ import { NextResponse } from "next/server";
 
 const DEFAULT_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "fax-assets";
 
+const resolveBucketName = () => {
+  const raw = (DEFAULT_BUCKET || "fax-assets").trim().toLowerCase();
+  const normalized = raw.replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return normalized || "fax-assets";
+};
+
 function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey =
@@ -59,8 +65,8 @@ export async function POST(request: Request) {
     "x-upsert": "true",
     "Content-Type": file.type || "application/octet-stream",
   };
-  const uploadUrl = `${config.supabaseUrl}/storage/v1/object/${DEFAULT_BUCKET}/${objectPath}`;
-
+ const bucketName = resolveBucketName();
+  const uploadUrl = `${config.supabaseUrl}/storage/v1/object/${bucketName}/${objectPath}`;
   const uploadToBucket = () =>
     fetch(uploadUrl, {
       method: "POST",
@@ -96,8 +102,8 @@ export async function POST(request: Request) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            id: DEFAULT_BUCKET,
-            name: DEFAULT_BUCKET,
+            id: bucketName,
+            name: bucketName,
             public: true,
           }),
         });
@@ -118,12 +124,12 @@ export async function POST(request: Request) {
       }
     }
 
-    const publicUrl = `${config.supabaseUrl}/storage/v1/object/public/${DEFAULT_BUCKET}/${objectPath}`;
+    const publicUrl = `${config.supabaseUrl}/storage/v1/object/public/${bucketName}/${objectPath}`;
 
     return NextResponse.json({
       url: publicUrl,
       path: objectPath,
-      bucket: DEFAULT_BUCKET,
+      bucket: bucketName,
       contentType: file.type || "application/octet-stream",
       filename: file.name,
     });
