@@ -501,25 +501,28 @@ function toAttachmentPayload(value: unknown): AttachmentPayload | null {
   return null;
 }
 
-function resolveAttachment(payload: RequestPayload): AttachmentPayload | null {
+function resolveAttachments(payload: RequestPayload): AttachmentPayload[] {
+  const attachments: AttachmentPayload[] = [];
+
   if (Array.isArray(payload.attachments)) {
-    const candidate = payload.attachments
+    attachments.push(
+      ...payload.attachments
       .map((item) => toAttachmentPayload(item))
-      .find((item): item is AttachmentPayload => Boolean(item));
-    if (candidate) return candidate;
+        .filter((item): item is AttachmentPayload => Boolean(item)),
+    );
   }
 
   const attachmentField = toAttachmentPayload(payload.attachment);
   if (attachmentField) {
-    return attachmentField;
+    attachments.push(attachmentField);
   }
 
  const attachmentsField = toAttachmentPayload(payload.attachments);
   if (attachmentsField) {
-    return attachmentsField;
+    attachments.push(attachmentsField);
   }
 
-  return null;
+  return attachments;
 }
 
 async function readAttachmentBinary(attachment: AttachmentPayload) {
@@ -1244,12 +1247,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "有効なFAX番号がありません。" }, { status: 400 });
   }
 
-  const attachment = resolveAttachment(payload);
-  let pdfFile: BinaryAttachment | null = null;
-  if (attachment) {
+  const attachments = resolveAttachments(payload);
+  let pdfFiles: BinaryAttachment[] = [];
+  if (attachments.length > 0) {
     try {
-      const attachmentFile = await readAttachmentBinary(attachment);
-      pdfFile = attachmentFile ? await ensurePdfAttachment(attachmentFile) : null;
+      const convertedFiles = await Promise.all(
+        attachments.map(async (attachment) => {
+          const attachmentFile = await readAttachmentBinary(attachment);
+          return attachmentFile ? ensurePdfAttachment(attachmentFile) : null;
+        }),
+      );
+      pdfFiles = convertedFiles.filter((file): file is BinaryAttachment => Boolean(file));
     } catch (error) {
       const message =
         error instanceof Error
@@ -1258,10 +1266,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
   } else {
-    pdfFile = buildPayloadPdfAttachment(payload);
+    const generatedPdfFile = buildPayloadPdfAttachment(payload);
+    pdfFiles = generatedPdfFile ? [generatedPdfFile] : [];
   }
 
-  if (!pdfFile) {
+  if (pdfFiles.length === 0) {
     return NextResponse.json(
       {
         error:
@@ -1301,12 +1310,17 @@ export async function POST(request: Request) {
           usePrintHeader,
           printHeaders,
         );
-        const content = await uploadFacsimileContent(
-          baseUrl,
-          apiToken,
-          facsimile.facsimileId,
-          pdfFile,
-        );
+        const contents = [];
+        for (const pdfFile of pdfFiles) {
+          contents.push(
+            await uploadFacsimileContent(
+              baseUrl,
+              apiToken,
+              facsimile.facsimileId,
+              pdfFile,
+            ),
+          );
+        }
         const transmission = await transmitFacsimile(baseUrl, apiToken, facsimile.facsimileId);
         results.push({
           to: target.original,
@@ -1315,7 +1329,7 @@ export async function POST(request: Request) {
           raw: {
             contactList: contactList.raw,
             facsimile: facsimile.raw,
-            content,
+            contents,
             transmission,
           },
         });

@@ -30,51 +30,51 @@ type SendResponse = {
 const translations = {
   en: {
     title: "Document fax",
-    description: "Upload a file and send it through the Fax API so the recipient receives the full document.",
+    description: "Upload files and send them through the Fax API so the recipient receives the full documents.",
     backToDashboard: "Back to dashboard",
     faxNumbersLabel: "Recipient fax numbers (one per line)",
-    documentLabel: "Document to fax",
-    emptyDocument: "No document uploaded.",
+    documentLabel: "Documents to fax",
+    emptyDocument: "No documents uploaded.",
     uploading: "Uploading...",
     openDocument: "Open document",
     subjectLabel: "Subject",
     defaultSubject: "Document fax",
     sendButton: "Send document fax",
     sendingButton: "Sending...",
-    missingDocument: "Please upload a document before sending fax.",
+    missingDocument: "Please upload at least one document before sending fax.",
     missingFaxNumber: "Please enter at least one fax number.",
     uploadFailed: "File upload failed",
     sendPartial: "Fax sending did not fully complete.",
-    sendSuccess: "Document was sent to the Fax API for",
+    sendSuccess: "Documents were sent to the Fax API for",
     sendFailed: "Fax sending failed",
     recipientsUnit: "fax number(s)",
   },
   ja: {
     title: "FAX \u8cc7\u6599",
     description:
-      "\u30d5\u30a1\u30a4\u30eb\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3001Fax API\u7d4c\u7531\u3067\u6587\u66f8\u5168\u4f53\u3092\u9001\u4fe1\u3057\u307e\u3059\u3002",
+      "\u8907\u6570\u30d5\u30a1\u30a4\u30eb\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3001Fax API\u7d4c\u7531\u3067\u8cc7\u6599\u5168\u4f53\u3092\u9001\u4fe1\u3057\u307e\u3059\u3002",
     backToDashboard: "\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u3078",
     faxNumbersLabel: "\u9001\u4fe1\u5148FAX\u756a\u53f7\uff081\u884c\u306b1\u4ef6\uff09",
-    documentLabel: "\u9001\u4fe1\u3059\u308b\u6587\u66f8",
-    emptyDocument: "\u6587\u66f8\u306f\u307e\u3060\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002",
+    documentLabel: "\u9001\u4fe1\u3059\u308b\u8cc7\u6599",
+    emptyDocument: "\u8cc7\u6599\u306f\u307e\u3060\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002",
     uploading: "\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u4e2d...",
-    openDocument: "\u6587\u66f8\u3092\u958b\u304f",
+    openDocument: "\u8cc7\u6599\u3092\u958b\u304f",
     subjectLabel: "\u4ef6\u540d",
-    defaultSubject: "\u6587\u66f8FAX",
-    sendButton: "\u6587\u66f8FAX\u3092\u9001\u4fe1",
+    defaultSubject: "FAX \u8cc7\u6599",
+    sendButton: "FAX \u8cc7\u6599\u3092\u9001\u4fe1",
     sendingButton: "\u9001\u4fe1\u4e2d...",
-    missingDocument: "\u9001\u4fe1\u524d\u306b\u6587\u66f8\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    missingDocument: "\u9001\u4fe1\u524d\u306b\u8cc7\u6599\u30921\u4ef6\u4ee5\u4e0a\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     missingFaxNumber: "FAX\u756a\u53f7\u30921\u4ef6\u4ee5\u4e0a\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
     uploadFailed: "\u30d5\u30a1\u30a4\u30eb\u306e\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
     sendPartial: "FAX\u9001\u4fe1\u306f\u5b8c\u5168\u306b\u306f\u5b8c\u4e86\u3057\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
-    sendSuccess: "\u6587\u66f8\u3092Fax API\u306b\u9001\u4fe1\u3057\u307e\u3057\u305f:",
+    sendSuccess: "\u8cc7\u6599\u3092Fax API\u306b\u9001\u4fe1\u3057\u307e\u3057\u305f:",
     sendFailed: "FAX\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
     recipientsUnit: "\u4ef6",
   },
   vi: {
     title: "Fax t\u00e0i li\u1ec7u",
     description:
-      "Upload file r\u1ed3i g\u1eedi qua Fax API \u0111\u1ec3 \u0111\u1ed1i t\u00e1c nh\u1eadn \u0111\u1ea7y \u0111\u1ee7 n\u1ed9i dung t\u00e0i li\u1ec7u.",
+      "Upload nhi\u1ec1u file r\u1ed3i g\u1eedi qua Fax API \u0111\u1ec3 \u0111\u1ed1i t\u00e1c nh\u1eadn \u0111\u1ea7y \u0111\u1ee7 n\u1ed9i dung t\u00e0i li\u1ec7u.",
     backToDashboard: "V\u1ec1 dashboard",
     faxNumbersLabel: "S\u1ed1 fax nh\u1eadn (m\u1ed7i d\u00f2ng m\u1ed9t s\u1ed1)",
     documentLabel: "T\u00e0i li\u1ec7u c\u1ea7n fax",
@@ -85,7 +85,7 @@ const translations = {
     defaultSubject: "Fax t\u00e0i li\u1ec7u",
     sendButton: "G\u1eedi fax t\u00e0i li\u1ec7u",
     sendingButton: "\u0110ang g\u1eedi...",
-    missingDocument: "Vui l\u00f2ng upload t\u00e0i li\u1ec7u tr\u01b0\u1edbc khi g\u1eedi fax.",
+    missingDocument: "Vui l\u00f2ng upload \u00edt nh\u1ea5t m\u1ed9t t\u00e0i li\u1ec7u tr\u01b0\u1edbc khi g\u1eedi fax.",
     missingFaxNumber: "Vui l\u00f2ng nh\u1eadp \u00edt nh\u1ea5t m\u1ed9t s\u1ed1 fax.",
     uploadFailed: "Upload file th\u1ea5t b\u1ea1i",
     sendPartial: "G\u1eedi fax ch\u01b0a ho\u00e0n t\u1ea5t.",
@@ -120,7 +120,7 @@ export default function DocumentFaxPage() {
   const [scope, setScope] = useState("guest");
   const [faxListInput, setFaxListInput] = useState("");
   const [subject, setSubject] = useState("");
-  const [document, setDocument] = useState<UploadedDocument | null>(null);
+  const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -155,35 +155,40 @@ export default function DocumentFaxPage() {
   }, []);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    setDocument(null);
+    const files = Array.from(event.target.files ?? []);
+    setDocuments([]);
     setMessage(null);
 
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("channel", "fax");
-    formData.append("scope", scope);
-    formData.append("category", "documents");
+    if (files.length === 0) return;
 
     setIsUploading(true);
     try {
-      const response = await fetch("/api/storage/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const payload = (await response.json()) as UploadResponse;
+      const uploadedDocuments = await Promise.all(
+        files.map(async (file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("channel", "fax");
+          formData.append("scope", scope);
+          formData.append("category", "documents");
 
-      if (!response.ok || !payload.url) {
-        throw new Error(payload.error || "Upload failed");
-      }
+          const response = await fetch("/api/storage/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const payload = (await response.json()) as UploadResponse;
 
-      setDocument({
-        filename: payload.filename || file.name,
-        type: payload.contentType || file.type || "application/octet-stream",
-        url: payload.url,
-      });
+          if (!response.ok || !payload.url) {
+            throw new Error(payload.error || "Upload failed");
+          }
+
+          return {
+            filename: payload.filename || file.name,
+            type: payload.contentType || file.type || "application/octet-stream",
+            url: payload.url,
+          };
+        }),
+      );
+      setDocuments(uploadedDocuments);
     } catch (error) {
       setMessage({
         type: "error",
@@ -195,7 +200,7 @@ export default function DocumentFaxPage() {
   };
 
   const handleSend = async () => {
-    if (!document) {
+    if (documents.length === 0) {
       setMessage({ type: "error", text: t.missingDocument });
       return;
     }
@@ -218,13 +223,11 @@ export default function DocumentFaxPage() {
           faxNumbers,
           subject: resolvedSubject,
           text: resolvedSubject,
-          attachments: [
-            {
+          attachments: documents.map((document) => ({
               filename: document.filename,
               url: document.url,
               type: isPdfDocument(document) ? "application/pdf" : document.type,
-            },
-          ],
+          })),
           fax_quality: 1,
           mapping_columns: JSON.stringify({ fax: 0 }),
         }),
@@ -240,7 +243,7 @@ export default function DocumentFaxPage() {
         faxNumbers.map((faxNumber) => ({
           channel: "fax",
           recipient: faxNumber,
-          subject: resolvedSubject || document.filename,
+          subject: resolvedSubject || documents[0]?.filename || t.defaultSubject,
           status: failedRecipients.has(faxNumber) ? "failed" : "sending",
         })),
       );
@@ -303,24 +306,29 @@ export default function DocumentFaxPage() {
                 <input
                   type="file"
                   accept="application/pdf,image/*,.txt,.csv,.json,.md"
+                  multiple
                   onChange={handleFileChange}
                   disabled={isUploading || isSending}
                 />
               </label>
 
-              {document ? (
-                <div className="document-preview">
-                  <strong>{document.filename}</strong>
-                  <small>{document.type || "application/octet-stream"}</small>
-                  {isImageDocument(document) ? (
-                    <img src={document.url} alt={document.filename} />
-                  ) : isPdfDocument(document) ? (
-                    <iframe title="PDF preview" src={document.url} />
-                  ) : (
-                    <a href={document.url} target="_blank" rel="noreferrer">
-                      {t.openDocument}
-                    </a>
-                  )}
+              {documents.length > 0 ? (
+                <div className="document-preview-list">
+                  {documents.map((document, index) => (
+                    <div className="document-preview" key={`${document.filename}-${index}`}>
+                      <strong>{document.filename}</strong>
+                      <small>{document.type || "application/octet-stream"}</small>
+                      {isImageDocument(document) ? (
+                        <img src={document.url} alt={document.filename} />
+                      ) : isPdfDocument(document) ? (
+                        <iframe title={`PDF preview ${index + 1}`} src={document.url} />
+                      ) : (
+                        <a href={document.url} target="_blank" rel="noreferrer">
+                          {t.openDocument}
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <p className="document-empty">{isUploading ? t.uploading : t.emptyDocument}</p>

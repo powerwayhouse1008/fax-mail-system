@@ -269,6 +269,11 @@ body {
   gap: 0.75rem;
 }
 
+.document-preview-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .document-preview {
   border: 1px solid #dbe2ea;
   border-radius: 12px;
