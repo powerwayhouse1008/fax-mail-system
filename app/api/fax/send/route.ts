@@ -337,7 +337,9 @@ function createPageBox(
   paperSize: PaperSize,
   orientation: "portrait" | "landscape" = "portrait",
 ): PageBox {
-  const base = paperSize === "A3" ? { width: 842, height: 1191 } : { width: 595, height: 842 };
+  // Nexlink rejects true A3 PDF media boxes. A3 uploads are reduced to a valid A4 page
+  // so users can select/upload A3 documents without triggering paper-size errors.
+  const base = { width: 595, height: 842 };
   return orientation === "landscape" ? { width: base.height, height: base.width } : base;
 }
 
@@ -994,15 +996,61 @@ async function callWithAuthFallback(
 }
 
 function extractErrorMessage(response: Awaited<ReturnType<typeof fetchJsonWithRetry>>) {
-  if (typeof response.data === "string" && response.data.trim()) return response.data.trim();
+  if (typeof response.data === "string" && response.data.trim()) {
+    return toUserFacingFaxError(response.data.trim());
+  }
   if (response.data && typeof response.data === "object") {
     const message =
       getObjectValue<string>(response.data, "message") ??
       getObjectValue<string>(response.data, "error") ??
       getObjectValue<string>(response.data, "detail");
-    if (typeof message === "string" && message.trim()) return message.trim();
+    if (typeof message === "string" && message.trim()) {
+      return toUserFacingFaxError(message.trim());
+    }
+
+    const details = getObjectValue<Array<{ message?: unknown }>>(response.data, "details");
+    const detailMessage = Array.isArray(details)
+      ? details.find((item) => typeof item?.message === "string")?.message
+      : null;
+    if (typeof detailMessage === "string" && detailMessage.trim()) {
+      return toUserFacingFaxError(detailMessage.trim());
+    }
   }
-  return response.rawText || `HTTP ${response.status}`;
+  return toUserFacingFaxError(response.rawText || `HTTP ${response.status}`);
+}
+
+function decodeEscapedUnicode(value: string) {
+  try {
+    return JSON.parse(`"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+  } catch {
+    return value;
+  }
+}
+
+function toUserFacingFaxError(value: string) {
+  const raw = value.trim();
+  const decoded = decodeEscapedUnicode(raw);
+  const haystack = `${raw} ${decoded}`;
+
+  if (
+    /0050002|用紙サイズ|A4|B4|\\u7528\\u7d19\\u30b5\\u30a4\\u30ba/i.test(haystack)
+  ) {
+    return "原稿の用紙サイズを自動調整できませんでした。A4のPDFで再送信してください。";
+  }
+
+  if (/PDFアップロード|upload/i.test(haystack)) {
+    return "PDFのアップロードに失敗しました。ファイルを確認してください。";
+  }
+
+  if (/NEXLINK_API_TOKEN|API_TOKEN|token/i.test(haystack)) {
+    return "FAX APIの設定が未完了です。";
+  }
+
+  if (/有効なFAX|FAX番号|fax number/i.test(haystack)) {
+    return "FAX番号を確認してください。";
+  }
+
+  return raw.length > 90 ? "FAX送信に失敗しました。ファイルと送信先を確認してください。" : raw;
 }
 
 async function createContactList(
@@ -1391,7 +1439,8 @@ export async function POST(request: Request) {
           },
         });
       } catch (error) {
-        const message = error instanceof Error ? error.message : "不明なエラー";
+        const message =
+          error instanceof Error ? toUserFacingFaxError(error.message) : "不明なエラー";
         results.push({
           to: target.original,
           success: false,
@@ -1419,7 +1468,9 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "不明なエラーが発生しました。";
+      error instanceof Error
+        ? toUserFacingFaxError(error.message)
+        : "不明なエラーが発生しました。";
 
     return NextResponse.json(
       {

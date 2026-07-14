@@ -59,6 +59,23 @@ const cleanList = (value: string) =>
 const isPdfAttachment = (fileName: string, mimeType: string) =>
   mimeType.toLowerCase() === "application/pdf" || /\.pdf$/i.test(fileName.trim());
 
+const createShortJapaneseSendError = (value: unknown) => {
+  const raw = typeof value === "string" ? value : "";
+  if (/0050002|用紙サイズ|\\u7528\\u7d19\\u30b5\\u30a4\\u30ba|A4|B4/.test(raw)) {
+    return "原稿の用紙サイズを自動調整できませんでした。A4のPDFで再送信してください。";
+  }
+  if (/PDFアップロード|upload/i.test(raw)) {
+    return "PDFのアップロードに失敗しました。ファイルを確認してください。";
+  }
+  if (/NEXLINK_API_TOKEN|API_TOKEN|token/i.test(raw)) {
+    return "FAX APIの設定が未完了です。";
+  }
+  if (/有効なFAX|FAX番号|fax number/i.test(raw)) {
+    return "FAX番号を確認してください。";
+  }
+  return raw && raw.length <= 90 ? raw : "送信に失敗しました。ファイルと送信先を確認してください。";
+};
+
 export default function RecipientListPage({ searchParams }: RecipientListPageProps) {
   const channel = searchParams?.channel ?? "fax";
   const isGmailChannel = channel === "gmail";
@@ -389,11 +406,9 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
         setSendMessage({
           type: "error",
-          text:
-            errorMessages[0] ??
-           `送信結果: 成功 ${totalSuccess}件 / 失敗 ${totalFailed}件（FAX ${faxSuccessCount}/${faxTotalCount}, Gmail ${gmailSuccessCount}/${gmailTotalCount}）${
-              firstFaxError || firstGmailError ? ` / 詳細: ${firstFaxError ?? firstGmailError}` : ""
-            }`,
+          text: createShortJapaneseSendError(
+            errorMessages[0] ?? firstFaxError ?? firstGmailError,
+          ),
         });
         return;
       }
