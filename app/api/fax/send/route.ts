@@ -58,7 +58,7 @@ type BinaryAttachment = {
   mimeType: string;
   binary: Buffer;
 };
-type PaperSize = "A3" | "A4";
+type PaperSize = "A4";
 type PageBox = {
   width: number;
   height: number;
@@ -326,19 +326,13 @@ function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
 }
 
 function resolvePaperSize(payload: RequestPayload): PaperSize {
-  const rawPaperSize = payload.paper_size ?? payload.paperSize;
-  if (typeof rawPaperSize !== "string") return DEFAULT_PAPER_SIZE;
-
-  const normalized = rawPaperSize.trim().toUpperCase();
-  return normalized === "A3" ? "A3" : "A4";
+  return DEFAULT_PAPER_SIZE;
 }
 
 function createPageBox(
   paperSize: PaperSize,
   orientation: "portrait" | "landscape" = "portrait",
 ): PageBox {
-  // Nexlink rejects true A3 PDF media boxes. A3 uploads are reduced to a valid A4 page
-  // so users can select/upload A3 documents without triggering paper-size errors.
   const base = { width: 595, height: 842 };
   return orientation === "landscape" ? { width: base.height, height: base.width } : base;
 }
