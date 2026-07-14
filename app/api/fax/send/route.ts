@@ -57,7 +57,7 @@ type BinaryAttachment = {
   mimeType: string;
   binary: Buffer;
 };
-type PaperSize = "A3" | "A4";
+type PaperSize = "A4" | "B4";
 type PageBox = {
   width: number;
   height: number;
@@ -329,14 +329,14 @@ function resolvePaperSize(payload: RequestPayload): PaperSize {
   if (typeof rawPaperSize !== "string") return DEFAULT_PAPER_SIZE;
 
   const normalized = rawPaperSize.trim().toUpperCase();
-  return normalized === "A3" ? "A3" : "A4";
+  return normalized === "B4" ? "B4" : "A4";
 }
 
 function createPageBox(
   paperSize: PaperSize,
   orientation: "portrait" | "landscape" = "portrait",
 ): PageBox {
-  const base = paperSize === "A3" ? { width: 842, height: 1191 } : { width: 595, height: 842 };
+  const base = paperSize === "B4" ? { width: 729, height: 1032 } : { width: 595, height: 842 };
   return orientation === "landscape" ? { width: base.height, height: base.width } : base;
 }
 

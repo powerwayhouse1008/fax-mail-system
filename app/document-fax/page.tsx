@@ -6,7 +6,7 @@ import AuthGuard from "../components/auth-guard";
 import { appendSendHistory } from "../send-history/history-store";
 
 type Locale = "en" | "ja" | "vi";
-type PaperSize = "A3" | "A4";
+type PaperSize = "A4" | "B4";
 
 type UploadedDocument = {
   filename: string;
@@ -100,11 +100,11 @@ const translations = {
 } as const;
 
 const detectLocale = (): Locale => {
-  if (typeof window === "undefined") return "en";
+  if (typeof window === "undefined") return "ja";
   const language = window.navigator.language.toLowerCase();
   if (language.startsWith("vi")) return "vi";
   if (language.startsWith("ja")) return "ja";
-  return "en";
+  return "ja";
 };
 
 const cleanFaxNumbers = (value: string) =>
@@ -119,8 +119,31 @@ const isImageDocument = (document: UploadedDocument) =>
 const isPdfDocument = (document: UploadedDocument) =>
   document.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(document.filename);
 
+const createShortJapaneseError = (value: unknown) => {
+  const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
+  if (!raw.trim()) return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
+
+  if (/0050002|\u7528\u7d19\u30b5\u30a4\u30ba|A4|B4/.test(raw)) {
+    return "\u7528\u7d19\u30b5\u30a4\u30ba\u304c\u4e0d\u6b63\u3067\u3059\u3002A4\u307e\u305f\u306fB4\u306ePDF\u3092\u4f7f\u7528\u3057\u3066\u304f\u3060\u3055\u3044\u3002";
+  }
+
+  if (/NEXLINK_API_TOKEN|API_TOKEN|token/i.test(raw)) {
+    return "FAX API\u306e\u8a2d\u5b9a\u304c\u672a\u5b8c\u4e86\u3067\u3059\u3002";
+  }
+
+  if (/\u6709\u52b9\u306aFAX|fax/i.test(raw) && /\u756a\u53f7|number/i.test(raw)) {
+    return "FAX\u756a\u53f7\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002";
+  }
+
+  if (/\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9|upload/i.test(raw)) {
+    return "\u30d5\u30a1\u30a4\u30eb\u306e\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
+  }
+
+  return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002\u5185\u5bb9\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002";
+};
+
 export default function DocumentFaxPage() {
-  const [locale, setLocale] = useState<Locale>("en");
+  const [locale, setLocale] = useState<Locale>("ja");
   const [scope, setScope] = useState("guest");
   const [faxListInput, setFaxListInput] = useState("");
   const [subject, setSubject] = useState("");
@@ -197,7 +220,7 @@ export default function DocumentFaxPage() {
     } catch (error) {
       setMessage({
         type: "error",
-        text: `${t.uploadFailed}${error instanceof Error ? `: ${error.message}` : ""}`,
+        text: createShortJapaneseError(error),
       });
     } finally {
       setIsUploading(false);
@@ -258,11 +281,7 @@ export default function DocumentFaxPage() {
         const firstDetail = failed.find((item) => item.error)?.error;
         setMessage({
           type: "error",
-          text:
-            payload.error ||
-            `${t.sendPartial} ${payload.successCount ?? 0}/${payload.total ?? faxNumbers.length}${
-              firstDetail ? `: ${firstDetail}` : ""
-            }`,
+          text: createShortJapaneseError(payload.error || firstDetail || t.sendPartial),
         });
         return;
       }
@@ -274,7 +293,7 @@ export default function DocumentFaxPage() {
     } catch (error) {
       setMessage({
         type: "error",
-        text: `${t.sendFailed}${error instanceof Error ? `: ${error.message}` : ""}`,
+        text: createShortJapaneseError(error),
       });
     } finally {
       setIsSending(false);
@@ -355,11 +374,11 @@ export default function DocumentFaxPage() {
             <span>{t.paperSizeLabel}</span>
             <select
               value={paperSize}
-              onChange={(event) => setPaperSize(event.target.value === "A3" ? "A3" : "A4")}
+              onChange={(event) => setPaperSize(event.target.value === "B4" ? "B4" : "A4")}
               disabled={isUploading || isSending}
             >
               <option value="A4">A4</option>
-              <option value="A3">A3</option>
+              <option value="B4">B4</option>
             </select>
           </label>
 
