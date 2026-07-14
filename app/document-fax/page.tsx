@@ -6,7 +6,7 @@ import AuthGuard from "../components/auth-guard";
 import { appendSendHistory } from "../send-history/history-store";
 
 type Locale = "en" | "ja" | "vi";
-type PaperSize = "A4" | "B4";
+type PaperSize = "A3" | "A4";
 
 type UploadedDocument = {
   filename: string;
@@ -123,8 +123,8 @@ const createShortJapaneseError = (value: unknown) => {
   const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
   if (!raw.trim()) return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
 
-  if (/0050002|\u7528\u7d19\u30b5\u30a4\u30ba|A4|B4/.test(raw)) {
-    return "\u7528\u7d19\u30b5\u30a4\u30ba\u304c\u4e0d\u6b63\u3067\u3059\u3002A4\u307e\u305f\u306fB4\u306ePDF\u3092\u4f7f\u7528\u3057\u3066\u304f\u3060\u3055\u3044\u3002";
+  if (/0050002|\u7528\u7d19\u30b5\u30a4\u30ba|A4|A3|B4/.test(raw)) {
+    return "\u7528\u7d19\u30b5\u30a4\u30ba\u3092A4\u307e\u305f\u306fA3\u306b\u81ea\u52d5\u8abf\u6574\u3057\u3066\u9001\u4fe1\u3057\u307e\u3059\u3002";
   }
 
   if (/NEXLINK_API_TOKEN|API_TOKEN|token/i.test(raw)) {
@@ -374,11 +374,11 @@ export default function DocumentFaxPage() {
             <span>{t.paperSizeLabel}</span>
             <select
               value={paperSize}
-              onChange={(event) => setPaperSize(event.target.value === "B4" ? "B4" : "A4")}
+              onChange={(event) => setPaperSize(event.target.value === "A3" ? "A3" : "A4")}
               disabled={isUploading || isSending}
             >
               <option value="A4">A4</option>
-              <option value="B4">B4</option>
+              <option value="A3">A3</option>
             </select>
           </label>
 
