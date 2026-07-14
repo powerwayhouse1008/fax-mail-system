@@ -5,6 +5,8 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import AuthGuard from "../components/auth-guard";
 import { appendSendHistory } from "../send-history/history-store";
 
+type Locale = "en" | "ja" | "vi";
+
 type UploadedDocument = {
   filename: string;
   type: string;
@@ -25,6 +27,82 @@ type SendResponse = {
   error?: string;
 };
 
+const translations = {
+  en: {
+    title: "Document fax",
+    description: "Upload a file and send it through the Fax API so the recipient receives the full document.",
+    backToDashboard: "Back to dashboard",
+    faxNumbersLabel: "Recipient fax numbers (one per line)",
+    documentLabel: "Document to fax",
+    emptyDocument: "No document uploaded.",
+    uploading: "Uploading...",
+    openDocument: "Open document",
+    subjectLabel: "Subject",
+    defaultSubject: "Document fax",
+    sendButton: "Send document fax",
+    sendingButton: "Sending...",
+    missingDocument: "Please upload a document before sending fax.",
+    missingFaxNumber: "Please enter at least one fax number.",
+    uploadFailed: "File upload failed",
+    sendPartial: "Fax sending did not fully complete.",
+    sendSuccess: "Document was sent to the Fax API for",
+    sendFailed: "Fax sending failed",
+    recipientsUnit: "fax number(s)",
+  },
+  ja: {
+    title: "\u6587\u66f8FAX",
+    description:
+      "\u30d5\u30a1\u30a4\u30eb\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3001Fax API\u7d4c\u7531\u3067\u6587\u66f8\u5168\u4f53\u3092\u9001\u4fe1\u3057\u307e\u3059\u3002",
+    backToDashboard: "\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u3078",
+    faxNumbersLabel: "\u9001\u4fe1\u5148FAX\u756a\u53f7\uff081\u884c\u306b1\u4ef6\uff09",
+    documentLabel: "\u9001\u4fe1\u3059\u308b\u6587\u66f8",
+    emptyDocument: "\u6587\u66f8\u306f\u307e\u3060\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3055\u308c\u3066\u3044\u307e\u305b\u3093\u3002",
+    uploading: "\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u4e2d...",
+    openDocument: "\u6587\u66f8\u3092\u958b\u304f",
+    subjectLabel: "\u4ef6\u540d",
+    defaultSubject: "\u6587\u66f8FAX",
+    sendButton: "\u6587\u66f8FAX\u3092\u9001\u4fe1",
+    sendingButton: "\u9001\u4fe1\u4e2d...",
+    missingDocument: "\u9001\u4fe1\u524d\u306b\u6587\u66f8\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    missingFaxNumber: "FAX\u756a\u53f7\u30921\u4ef6\u4ee5\u4e0a\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+    uploadFailed: "\u30d5\u30a1\u30a4\u30eb\u306e\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
+    sendPartial: "FAX\u9001\u4fe1\u306f\u5b8c\u5168\u306b\u306f\u5b8c\u4e86\u3057\u307e\u305b\u3093\u3067\u3057\u305f\u3002",
+    sendSuccess: "\u6587\u66f8\u3092Fax API\u306b\u9001\u4fe1\u3057\u307e\u3057\u305f:",
+    sendFailed: "FAX\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
+    recipientsUnit: "\u4ef6",
+  },
+  vi: {
+    title: "Fax t\u00e0i li\u1ec7u",
+    description:
+      "Upload file r\u1ed3i g\u1eedi qua Fax API \u0111\u1ec3 \u0111\u1ed1i t\u00e1c nh\u1eadn \u0111\u1ea7y \u0111\u1ee7 n\u1ed9i dung t\u00e0i li\u1ec7u.",
+    backToDashboard: "V\u1ec1 dashboard",
+    faxNumbersLabel: "S\u1ed1 fax nh\u1eadn (m\u1ed7i d\u00f2ng m\u1ed9t s\u1ed1)",
+    documentLabel: "T\u00e0i li\u1ec7u c\u1ea7n fax",
+    emptyDocument: "Ch\u01b0a upload t\u00e0i li\u1ec7u.",
+    uploading: "\u0110ang upload...",
+    openDocument: "M\u1edf t\u00e0i li\u1ec7u",
+    subjectLabel: "Ti\u00eau \u0111\u1ec1",
+    defaultSubject: "Fax t\u00e0i li\u1ec7u",
+    sendButton: "G\u1eedi fax t\u00e0i li\u1ec7u",
+    sendingButton: "\u0110ang g\u1eedi...",
+    missingDocument: "Vui l\u00f2ng upload t\u00e0i li\u1ec7u tr\u01b0\u1edbc khi g\u1eedi fax.",
+    missingFaxNumber: "Vui l\u00f2ng nh\u1eadp \u00edt nh\u1ea5t m\u1ed9t s\u1ed1 fax.",
+    uploadFailed: "Upload file th\u1ea5t b\u1ea1i",
+    sendPartial: "G\u1eedi fax ch\u01b0a ho\u00e0n t\u1ea5t.",
+    sendSuccess: "\u0110\u00e3 g\u1eedi t\u00e0i li\u1ec7u t\u1edbi Fax API cho",
+    sendFailed: "G\u1eedi fax th\u1ea5t b\u1ea1i",
+    recipientsUnit: "s\u1ed1 fax",
+  },
+} as const;
+
+const detectLocale = (): Locale => {
+  if (typeof window === "undefined") return "en";
+  const language = window.navigator.language.toLowerCase();
+  if (language.startsWith("vi")) return "vi";
+  if (language.startsWith("ja")) return "ja";
+  return "en";
+};
+
 const cleanFaxNumbers = (value: string) =>
   value
     .split(/\r?\n|,|;/)
@@ -38,15 +116,22 @@ const isPdfDocument = (document: UploadedDocument) =>
   document.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(document.filename);
 
 export default function DocumentFaxPage() {
+  const [locale, setLocale] = useState<Locale>("en");
   const [scope, setScope] = useState("guest");
   const [faxListInput, setFaxListInput] = useState("");
-  const [subject, setSubject] = useState("Fax tài liệu");
+  const [subject, setSubject] = useState("");
   const [document, setDocument] = useState<UploadedDocument | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const t = translations[locale];
   const faxNumbers = useMemo(() => cleanFaxNumbers(faxListInput), [faxListInput]);
+  const resolvedSubject = subject.trim() || t.defaultSubject;
+
+  useEffect(() => {
+    setLocale(detectLocale());
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -102,7 +187,7 @@ export default function DocumentFaxPage() {
     } catch (error) {
       setMessage({
         type: "error",
-        text: `Upload file thất bại${error instanceof Error ? `: ${error.message}` : ""}`,
+        text: `${t.uploadFailed}${error instanceof Error ? `: ${error.message}` : ""}`,
       });
     } finally {
       setIsUploading(false);
@@ -111,12 +196,12 @@ export default function DocumentFaxPage() {
 
   const handleSend = async () => {
     if (!document) {
-      setMessage({ type: "error", text: "Vui lòng upload tài liệu trước khi gửi fax." });
+      setMessage({ type: "error", text: t.missingDocument });
       return;
     }
 
     if (faxNumbers.length === 0) {
-      setMessage({ type: "error", text: "Vui lòng nhập ít nhất một số fax." });
+      setMessage({ type: "error", text: t.missingFaxNumber });
       return;
     }
 
@@ -131,8 +216,8 @@ export default function DocumentFaxPage() {
         },
         body: JSON.stringify({
           faxNumbers,
-          subject,
-          text: subject,
+          subject: resolvedSubject,
+          text: resolvedSubject,
           attachments: [
             {
               filename: document.filename,
@@ -155,7 +240,7 @@ export default function DocumentFaxPage() {
         faxNumbers.map((faxNumber) => ({
           channel: "fax",
           recipient: faxNumber,
-          subject: subject || document.filename,
+          subject: resolvedSubject || document.filename,
           status: failedRecipients.has(faxNumber) ? "failed" : "sending",
         })),
       );
@@ -166,7 +251,7 @@ export default function DocumentFaxPage() {
           type: "error",
           text:
             payload.error ||
-            `Gửi fax chưa hoàn tất. Thành công ${payload.successCount ?? 0}/${payload.total ?? faxNumbers.length}${
+            `${t.sendPartial} ${payload.successCount ?? 0}/${payload.total ?? faxNumbers.length}${
               firstDetail ? `: ${firstDetail}` : ""
             }`,
         });
@@ -175,12 +260,12 @@ export default function DocumentFaxPage() {
 
       setMessage({
         type: "success",
-        text: `Đã gửi tài liệu tới Fax API cho ${payload.successCount ?? faxNumbers.length} số fax.`,
+        text: `${t.sendSuccess} ${payload.successCount ?? faxNumbers.length} ${t.recipientsUnit}.`,
       });
     } catch (error) {
       setMessage({
         type: "error",
-        text: `Gửi fax thất bại${error instanceof Error ? `: ${error.message}` : ""}`,
+        text: `${t.sendFailed}${error instanceof Error ? `: ${error.message}` : ""}`,
       });
     } finally {
       setIsSending(false);
@@ -193,17 +278,17 @@ export default function DocumentFaxPage() {
         <section className="dashboard-card document-fax-card">
           <header className="history-header">
             <div>
-              <h1>Fax tài liệu</h1>
-              <p>Upload file rồi gửi trực tiếp qua Fax API để đối tác nhận đầy đủ nội dung tài liệu.</p>
+              <h1>{t.title}</h1>
+              <p>{t.description}</p>
             </div>
             <Link href="/dashboard" className="btn btn-secondary">
-              Về dashboard
+              {t.backToDashboard}
             </Link>
           </header>
 
           <div className="recipient-grid">
             <label className="field">
-              <span>Số fax nhận (mỗi dòng một số)</span>
+              <span>{t.faxNumbersLabel}</span>
               <textarea
                 rows={8}
                 value={faxListInput}
@@ -214,7 +299,7 @@ export default function DocumentFaxPage() {
 
             <div className="document-upload-panel">
               <label className="field">
-                <span>Tài liệu cần fax</span>
+                <span>{t.documentLabel}</span>
                 <input
                   type="file"
                   accept="application/pdf,image/*,.txt,.csv,.json,.md"
@@ -233,19 +318,23 @@ export default function DocumentFaxPage() {
                     <iframe title="PDF preview" src={document.url} />
                   ) : (
                     <a href={document.url} target="_blank" rel="noreferrer">
-                      Mở tài liệu
+                      {t.openDocument}
                     </a>
                   )}
                 </div>
               ) : (
-                <p className="document-empty">{isUploading ? "Đang upload..." : "Chưa upload tài liệu."}</p>
+                <p className="document-empty">{isUploading ? t.uploading : t.emptyDocument}</p>
               )}
             </div>
           </div>
 
           <label className="field">
-            <span>Tiêu đề</span>
-            <input value={subject} onChange={(event) => setSubject(event.target.value)} />
+            <span>{t.subjectLabel}</span>
+            <input
+              value={subject}
+              onChange={(event) => setSubject(event.target.value)}
+              placeholder={t.defaultSubject}
+            />
           </label>
 
           {message ? (
@@ -265,7 +354,7 @@ export default function DocumentFaxPage() {
               onClick={handleSend}
               disabled={isUploading || isSending}
             >
-              {isSending ? "Đang gửi..." : "Gửi fax tài liệu"}
+              {isSending ? t.sendingButton : t.sendButton}
             </button>
           </div>
         </section>
