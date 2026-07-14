@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
 const DEFAULT_FAX_QUALITY = 1;
+const DEFAULT_PAPER_SIZE = "A4";
 const DEFAULT_MAPPING_COLUMNS: Record<string, number> = { fax: 0 };
 const DISALLOWED_MAPPING_COLUMN_KEYS = new Set(["use_print_header"]);
 const DISALLOWED_PRINT_HEADER_VALUES = new Set(["use_print_header"]);
@@ -35,6 +36,8 @@ type RequestPayload = {
   body?: unknown;
   attachments?: unknown;
   attachment?: unknown;
+  paperSize?: unknown;
+  paper_size?: unknown;
   mapping_columns?: unknown;
   mappingColumns?: unknown;
 };
@@ -53,6 +56,11 @@ type BinaryAttachment = {
   filename: string;
   mimeType: string;
   binary: Buffer;
+};
+type PaperSize = "A3" | "A4";
+type PageBox = {
+  width: number;
+  height: number;
 };
 
 type SendResult =
@@ -314,6 +322,22 @@ function resolveFaxQuality(payload: RequestPayload): 0 | 1 {
   if (rawFaxQuality === "0") return 0;
   if (rawFaxQuality === "1") return 1;
   return DEFAULT_FAX_QUALITY;
+}
+
+function resolvePaperSize(payload: RequestPayload): PaperSize {
+  const rawPaperSize = payload.paper_size ?? payload.paperSize;
+  if (typeof rawPaperSize !== "string") return DEFAULT_PAPER_SIZE;
+
+  const normalized = rawPaperSize.trim().toUpperCase();
+  return normalized === "A3" ? "A3" : "A4";
+}
+
+function createPageBox(
+  paperSize: PaperSize,
+  orientation: "portrait" | "landscape" = "portrait",
+): PageBox {
+  const base = paperSize === "A3" ? { width: 842, height: 1191 } : { width: 595, height: 842 };
+  return orientation === "landscape" ? { width: base.height, height: base.width } : base;
 }
 
 function resolvePrintHeaders(payload: RequestPayload): string[] {
@@ -611,20 +635,21 @@ function toPdfLiteralString(value: string) {
   return `(${normalized || " "})`;
 }
 
-function createSimplePdf(lines: string[]) {
+function createSimplePdf(lines: string[], paperSize: PaperSize = DEFAULT_PAPER_SIZE) {
+  const page = createPageBox(paperSize);
   const normalizedLines = lines.slice(0, 90);
   const textOps = normalizedLines.length
     ? normalizedLines
                 .map((line) => `${toPdfLiteralString(line)} Tj`)
         .join(" T* ")
         : `${toPdfLiteralString(" ")} Tj`;
-  const contentStream = `BT /F1 11 Tf 50 792 Td 14 TL ${textOps} ET`;
+  const contentStream = `BT /F1 11 Tf 50 ${page.height - 50} Td 14 TL ${textOps} ET`;
   const contentLength = Buffer.byteLength(contentStream, "utf-8");
 
   const objects: string[] = [
   "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
     "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
-    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
+    `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n`,
     "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
     `5 0 obj << /Length ${contentLength} >> stream
 ${contentStream}
@@ -655,7 +680,7 @@ ${xrefStart}
 `;
   return Buffer.from(output, "utf-8");
 }
-function createJpegPdf(imageBinary: Buffer) {
+function createJpegPdf(imageBinary: Buffer, paperSize: PaperSize = DEFAULT_PAPER_SIZE) {
   let width = 1200;
   let height = 1600;
 
@@ -667,8 +692,9 @@ function createJpegPdf(imageBinary: Buffer) {
     }
   }
 
-  const pageWidth = 595;
-  const pageHeight = 842;
+  const page = createPageBox(paperSize, width > height ? "landscape" : "portrait");
+  const pageWidth = page.width;
+  const pageHeight = page.height;
   const scale = Math.min(pageWidth / width, pageHeight / height);
   const drawWidth = Math.max(1, Math.floor(width * scale));
   const drawHeight = Math.max(1, Math.floor(height * scale));
@@ -685,7 +711,7 @@ function createJpegPdf(imageBinary: Buffer) {
     Buffer.from(`2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
 `, "ascii"),
     Buffer.from(
-      `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >> endobj
+      `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >> endobj
 `,
       "ascii",
     ),
@@ -766,18 +792,18 @@ function buildPayloadLines(payload: RequestPayload): string[] {
     .split(/\r?\n/);
 }
 
-function buildPayloadPdfAttachment(payload: RequestPayload): BinaryAttachment | null {
+function buildPayloadPdfAttachment(payload: RequestPayload, paperSize: PaperSize): BinaryAttachment | null {
   const lines = buildPayloadLines(payload);
   if (!lines.length) return null;
   
   return {
     filename: "fax-content.pdf",
     mimeType: "application/pdf",
-    binary: createSimplePdf(lines),
+    binary: createSimplePdf(lines, paperSize),
   };
 }
 
-function textToPdf(binary: Buffer) {
+function textToPdf(binary: Buffer, paperSize: PaperSize) {
   const utf8Text = binary.toString("utf-8");
   const hasReplacementCharacters = utf8Text.includes("\uFFFD");
   const hasMojibakePattern = /[ãâ][\x80-\xBF]/.test(utf8Text);
@@ -790,10 +816,13 @@ function textToPdf(binary: Buffer) {
       text = utf8Text;
     }
   }
-  return createSimplePdf(text.split(/\r?\n/));
+  return createSimplePdf(text.split(/\r?\n/), paperSize);
 }
 
-async function ensurePdfAttachment(file: BinaryAttachment): Promise<BinaryAttachment> {
+async function ensurePdfAttachment(
+  file: BinaryAttachment,
+  paperSize: PaperSize,
+): Promise<BinaryAttachment> {
   const mimeType = file.mimeType.toLowerCase();
   
 if (mimeType.startsWith("image/")) {
@@ -801,7 +830,7 @@ if (mimeType.startsWith("image/")) {
       return {
         filename: replaceExtension(file.filename, ".pdf"),
         mimeType: "application/pdf",
-        binary: createJpegPdf(file.binary),
+        binary: createJpegPdf(file.binary, paperSize),
       };
     }
     return {
@@ -812,7 +841,7 @@ if (mimeType.startsWith("image/")) {
         `元ファイル名: ${file.filename}`,
         "JPEG画像はそのままFAX送信用PDFに変換されます。",
         "PNG/HEIC等は未対応のため、PDF化して添付してください。",
-      ]),
+      ], paperSize),
     };
   }
 
@@ -826,7 +855,7 @@ if (mimeType.startsWith("image/")) {
           `元ファイル名: ${file.filename}`,
           "",
           "PDFを再保存（印刷→PDF）して再アップロードしてください。",
-        ]),
+        ], paperSize),
       };
     }
     return {
@@ -845,7 +874,7 @@ if (mimeType.startsWith("image/")) {
     return {
       filename: replaceExtension(file.filename, ".pdf"),
       mimeType: "application/pdf",
-      binary: textToPdf(file.binary),
+      binary: textToPdf(file.binary, paperSize),
     };
   }
 
@@ -858,7 +887,7 @@ if (mimeType.startsWith("image/")) {
       `MIMEタイプ: ${file.mimeType}`,
       "",
       "※ この形式の本文自動変換には未対応のため、送信用の簡易PDFを生成しています。",
-    ]),
+    ], paperSize),
   };
 }
 function extractFirstImageUrlFromHtml(html: string) {
@@ -1247,6 +1276,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "有効なFAX番号がありません。" }, { status: 400 });
   }
 
+  const paperSize = resolvePaperSize(payload);
   const attachments = resolveAttachments(payload);
   let pdfFiles: BinaryAttachment[] = [];
   if (attachments.length > 0) {
@@ -1254,7 +1284,7 @@ export async function POST(request: Request) {
       const convertedFiles = await Promise.all(
         attachments.map(async (attachment) => {
           const attachmentFile = await readAttachmentBinary(attachment);
-          return attachmentFile ? ensurePdfAttachment(attachmentFile) : null;
+          return attachmentFile ? ensurePdfAttachment(attachmentFile, paperSize) : null;
         }),
       );
       pdfFiles = convertedFiles.filter((file): file is BinaryAttachment => Boolean(file));
@@ -1266,7 +1296,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
   } else {
-    const generatedPdfFile = buildPayloadPdfAttachment(payload);
+    const generatedPdfFile = buildPayloadPdfAttachment(payload, paperSize);
     pdfFiles = generatedPdfFile ? [generatedPdfFile] : [];
   }
 

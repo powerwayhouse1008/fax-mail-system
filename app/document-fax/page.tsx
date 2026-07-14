@@ -6,6 +6,7 @@ import AuthGuard from "../components/auth-guard";
 import { appendSendHistory } from "../send-history/history-store";
 
 type Locale = "en" | "ja" | "vi";
+type PaperSize = "A3" | "A4";
 
 type UploadedDocument = {
   filename: string;
@@ -38,6 +39,7 @@ const translations = {
     uploading: "Uploading...",
     openDocument: "Open document",
     subjectLabel: "Subject",
+    paperSizeLabel: "Paper size",
     defaultSubject: "Document fax",
     sendButton: "Send document fax",
     sendingButton: "Sending...",
@@ -60,6 +62,7 @@ const translations = {
     uploading: "\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u4e2d...",
     openDocument: "\u8cc7\u6599\u3092\u958b\u304f",
     subjectLabel: "\u4ef6\u540d",
+    paperSizeLabel: "\u7528\u7d19\u30b5\u30a4\u30ba",
     defaultSubject: "FAX \u8cc7\u6599",
     sendButton: "FAX \u8cc7\u6599\u3092\u9001\u4fe1",
     sendingButton: "\u9001\u4fe1\u4e2d...",
@@ -82,6 +85,7 @@ const translations = {
     uploading: "\u0110ang upload...",
     openDocument: "M\u1edf t\u00e0i li\u1ec7u",
     subjectLabel: "Ti\u00eau \u0111\u1ec1",
+    paperSizeLabel: "Kh\u1ed5 gi\u1ea5y",
     defaultSubject: "Fax t\u00e0i li\u1ec7u",
     sendButton: "G\u1eedi fax t\u00e0i li\u1ec7u",
     sendingButton: "\u0110ang g\u1eedi...",
@@ -120,6 +124,7 @@ export default function DocumentFaxPage() {
   const [scope, setScope] = useState("guest");
   const [faxListInput, setFaxListInput] = useState("");
   const [subject, setSubject] = useState("");
+  const [paperSize, setPaperSize] = useState<PaperSize>("A4");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -228,6 +233,7 @@ export default function DocumentFaxPage() {
               url: document.url,
               type: isPdfDocument(document) ? "application/pdf" : document.type,
           })),
+          paper_size: paperSize,
           fax_quality: 1,
           mapping_columns: JSON.stringify({ fax: 0 }),
         }),
@@ -343,6 +349,18 @@ export default function DocumentFaxPage() {
               onChange={(event) => setSubject(event.target.value)}
               placeholder={t.defaultSubject}
             />
+          </label>
+
+          <label className="field">
+            <span>{t.paperSizeLabel}</span>
+            <select
+              value={paperSize}
+              onChange={(event) => setPaperSize(event.target.value === "A3" ? "A3" : "A4")}
+              disabled={isUploading || isSending}
+            >
+              <option value="A4">A4</option>
+              <option value="A3">A3</option>
+            </select>
           </label>
 
           {message ? (
