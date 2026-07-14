@@ -16,6 +16,12 @@ const actions = [
     cta: "FAX送付状を作成",
   },
   {
+    title: "Fax tài liệu",
+    description: "Upload PDF/ảnh/tài liệu rồi gửi trực tiếp qua Fax API để đối tác nhận đầy đủ nội dung file.",
+    href: "/document-fax",
+    cta: "Mở fax tài liệu",
+  },
+  {
     title: "Gmail配信",
     description: "Gmail配信用の送付状テンプレートを作成します。",
     href: "/fax-template?channel=gmail",
