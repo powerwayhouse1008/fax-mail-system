@@ -334,7 +334,7 @@ function createPageBox(
   orientation: "portrait" | "landscape" = "portrait",
 ): PageBox {
   const base = { width: 595, height: 842 };
-  return orientation === "landscape" ? { width: base.height, height: base.width } : base;
+  return base;
 }
 
 function resolvePrintHeaders(payload: RequestPayload): string[] {
@@ -1029,7 +1029,7 @@ function toUserFacingFaxError(value: string) {
   if (
     /0050002|用紙サイズ|A4|B4|\\u7528\\u7d19\\u30b5\\u30a4\\u30ba/i.test(haystack)
   ) {
-    return "原稿の用紙サイズを自動調整できませんでした。A4のPDFで再送信してください。";
+    return "FAX APIが原稿サイズを受け付けませんでした。別のPDFまたは画像でお試しください。";
   }
 
   if (/PDFアップロード|upload/i.test(haystack)) {

@@ -62,7 +62,7 @@ const isPdfAttachment = (fileName: string, mimeType: string) =>
 const createShortJapaneseSendError = (value: unknown) => {
   const raw = typeof value === "string" ? value : "";
   if (/0050002|用紙サイズ|\\u7528\\u7d19\\u30b5\\u30a4\\u30ba|A4|B4/.test(raw)) {
-    return "原稿の用紙サイズを自動調整できませんでした。A4のPDFで再送信してください。";
+    return "FAX APIが原稿サイズを受け付けませんでした。別のPDFまたは画像でお試しください。";
   }
   if (/PDFアップロード|upload/i.test(raw)) {
     return "PDFのアップロードに失敗しました。ファイルを確認してください。";
