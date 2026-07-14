@@ -39,7 +39,7 @@ const translations: Record<
     logout: "Log out",
     actions: [
       {
-        title: "Bulk fax",
+        title: "Home viewing fax",
         description: "Create a fax cover template and attach a business card for bulk fax sending.",
         href: "/fax-template?channel=fax",
         cta: "Create fax cover",
@@ -92,7 +92,7 @@ const translations: Record<
         cta: "FAX\u9001\u4ed8\u72b6\u3092\u4f5c\u6210",
       },
       {
-        title: "\u6587\u66f8FAX",
+        title: "FAX \u8cc7\u6599",
         description:
           "PDF\u30fb\u753b\u50cf\u30fb\u6587\u66f8\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3001Fax API\u7d4c\u7531\u3067\u6587\u66f8\u5168\u4f53\u3092\u9001\u4fe1\u3057\u307e\u3059\u3002",
         href: "/document-fax",
@@ -132,7 +132,7 @@ const translations: Record<
     logout: "\u0110\u0103ng xu\u1ea5t",
     actions: [
       {
-        title: "G\u1eedi fax h\u00e0ng lo\u1ea1t",
+        title: "Fax xem nh\u00e0",
         description: "T\u1ea1o m\u1eabu b\u00eca fax v\u00e0 upload danh thi\u1ebfp \u0111\u1ec3 g\u1eedi fax h\u00e0ng lo\u1ea1t.",
         href: "/fax-template?channel=fax",
         cta: "T\u1ea1o b\u00eca fax",

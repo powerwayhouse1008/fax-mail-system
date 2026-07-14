@@ -50,7 +50,7 @@ const translations = {
     recipientsUnit: "fax number(s)",
   },
   ja: {
-    title: "\u6587\u66f8FAX",
+    title: "FAX \u8cc7\u6599",
     description:
       "\u30d5\u30a1\u30a4\u30eb\u3092\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3057\u3001Fax API\u7d4c\u7531\u3067\u6587\u66f8\u5168\u4f53\u3092\u9001\u4fe1\u3057\u307e\u3059\u3002",
     backToDashboard: "\u30c0\u30c3\u30b7\u30e5\u30dc\u30fc\u30c9\u3078",
