@@ -85,7 +85,7 @@ const translations: Record<
     logout: "\u30ed\u30b0\u30a2\u30a6\u30c8",
     actions: [
       {
-        title: "FAX\u4e00\u62ec\u9001\u4fe1",
+        title: "FAX \u5185\u898b",
         description:
           "FAX\u9001\u4fe1\u30c6\u30f3\u30d7\u30ec\u30fc\u30c8\u4f5c\u6210\u3068\u540d\u523a\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u3092\u307e\u3068\u3081\u3066\u884c\u3044\u307e\u3059\u3002",
         href: "/fax-template?channel=fax",
