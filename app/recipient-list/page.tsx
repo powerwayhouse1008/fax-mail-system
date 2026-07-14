@@ -56,6 +56,9 @@ const cleanList = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const isPdfAttachment = (fileName: string, mimeType: string) =>
+  mimeType.toLowerCase() === "application/pdf" || /\.pdf$/i.test(fileName.trim());
+
 export default function RecipientListPage({ searchParams }: RecipientListPageProps) {
   const channel = searchParams?.channel ?? "fax";
   const isGmailChannel = channel === "gmail";
@@ -200,6 +203,14 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
   const buildFaxPreviewAttachment = async (): Promise<AttachmentPayload | null> => {
     if (isGmailChannel) return null;
     if (typeof window === "undefined") return null;
+
+    if (uploadedCard?.url && isPdfAttachment(uploadedCard.name, uploadedCard.type)) {
+      return {
+        filename: uploadedCard.name || "fax-document.pdf",
+        url: uploadedCard.url,
+        type: "application/pdf",
+      };
+    }
 
     const width = 1240;
     const height = 1754;
