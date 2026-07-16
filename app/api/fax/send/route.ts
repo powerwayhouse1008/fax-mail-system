@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, degrees } from "pdf-lib";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
 const DEFAULT_FAX_QUALITY = 1;
@@ -337,6 +337,31 @@ function createPageBox(
   return base;
 }
 
+function fitPageContentToPortraitBox(
+  contentWidth: number,
+  contentHeight: number,
+  pageBox: PageBox,
+) {
+  const shouldRotate = contentWidth > contentHeight;
+  const fittedWidth = shouldRotate ? contentHeight : contentWidth;
+  const fittedHeight = shouldRotate ? contentWidth : contentHeight;
+  const scale = Math.min(pageBox.width / fittedWidth, pageBox.height / fittedHeight);
+  const drawWidth = contentWidth * scale;
+  const drawHeight = contentHeight * scale;
+  const rotatedWidth = shouldRotate ? drawHeight : drawWidth;
+  const rotatedHeight = shouldRotate ? drawWidth : drawHeight;
+  const x = (pageBox.width - rotatedWidth) / 2;
+  const y = (pageBox.height - rotatedHeight) / 2;
+
+  return {
+    shouldRotate,
+    drawWidth,
+    drawHeight,
+    x,
+    y,
+  };
+}
+
 function resolvePrintHeaders(payload: RequestPayload): string[] {
   const rawPrintHeaders = payload.print_headers ?? payload.printHeaders;
   const normalizePrintHeaderValue = (value: string) => {
@@ -624,24 +649,31 @@ function isLikelyValidPdf(binary: Buffer) {
 async function resizePdfToPaperSize(binary: Buffer, paperSize: PaperSize) {
   const source = await PDFDocument.load(binary, { ignoreEncryption: true });
   const target = await PDFDocument.create();
+  const pageBox = createPageBox(paperSize);
 
   for (let index = 0; index < source.getPageCount(); index += 1) {
     const [embeddedPage] = await target.embedPdf(source, [index]);
     const originalWidth = embeddedPage.width;
     const originalHeight = embeddedPage.height;
-    const orientation = originalWidth > originalHeight ? "landscape" : "portrait";
-    const pageBox = createPageBox(paperSize, orientation);
-    const scale = Math.min(pageBox.width / originalWidth, pageBox.height / originalHeight);
-    const drawWidth = originalWidth * scale;
-    const drawHeight = originalHeight * scale;
+    const fit = fitPageContentToPortraitBox(originalWidth, originalHeight, pageBox);
     const page = target.addPage([pageBox.width, pageBox.height]);
 
-    page.drawPage(embeddedPage, {
-      x: (pageBox.width - drawWidth) / 2,
-      y: (pageBox.height - drawHeight) / 2,
-      width: drawWidth,
-      height: drawHeight,
-    });
+    if (fit.shouldRotate) {
+      page.drawPage(embeddedPage, {
+        x: fit.x + fit.drawHeight,
+        y: fit.y,
+        width: fit.drawWidth,
+        height: fit.drawHeight,
+        rotate: degrees(90),
+      });
+    } else {
+      page.drawPage(embeddedPage, {
+        x: fit.x,
+        y: fit.y,
+        width: fit.drawWidth,
+        height: fit.drawHeight,
+      });
+    }
   }
 
   return Buffer.from(await target.save({ useObjectStreams: false }));
@@ -715,16 +747,18 @@ function createJpegPdf(imageBinary: Buffer, paperSize: PaperSize = DEFAULT_PAPER
     }
   }
 
-  const page = createPageBox(paperSize, width > height ? "landscape" : "portrait");
+  const page = createPageBox(paperSize);
   const pageWidth = page.width;
   const pageHeight = page.height;
-  const scale = Math.min(pageWidth / width, pageHeight / height);
-  const drawWidth = Math.max(1, Math.floor(width * scale));
-  const drawHeight = Math.max(1, Math.floor(height * scale));
-  const x = Math.floor((pageWidth - drawWidth) / 2);
-  const y = Math.floor((pageHeight - drawHeight) / 2);
+  const fit = fitPageContentToPortraitBox(width, height, page);
+  const drawWidth = Math.max(1, Math.floor(fit.drawWidth));
+  const drawHeight = Math.max(1, Math.floor(fit.drawHeight));
+  const x = Math.floor(fit.x);
+  const y = Math.floor(fit.y);
 
-  const contentStream = `q ${drawWidth} 0 0 ${drawHeight} ${x} ${y} cm /Im0 Do Q`;
+  const contentStream = fit.shouldRotate
+    ? `q 0 ${drawWidth} ${-drawHeight} 0 ${x + drawHeight} ${y} cm /Im0 Do Q`
+    : `q ${drawWidth} 0 0 ${drawHeight} ${x} ${y} cm /Im0 Do Q`;
   const contentLength = Buffer.byteLength(contentStream, "utf-8");
   const imageLength = imageBinary.length;
 

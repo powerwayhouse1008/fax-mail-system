@@ -289,7 +289,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     drawText(`${faxDraftContent.address || ""}`, 70, 1320, 32);
     drawText(`${faxDraftContent.phoneAndFax || ""}`, 70, 1380, 32);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.98);
     return {
       filename: "fax-a4-preview.jpg",
       content: dataUrl.split(",")[1] || "",

@@ -95,7 +95,7 @@ const convertImageToJpegFile = async (file: File): Promise<File> => {
   context.drawImage(image, 0, 0);
 
   const jpegBlob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", 0.92);
+    canvas.toBlob(resolve, "image/jpeg", 0.98);
   });
   if (!jpegBlob) {
     return file;
