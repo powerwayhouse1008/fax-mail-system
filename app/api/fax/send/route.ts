@@ -649,15 +649,6 @@ function ensurePdfFilename(filename: string) {
 function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
-function isLikelyValidPdf(binary: Buffer) {
-  if (!isPdfBinary(binary)) return false;
-
-  const tail = binary.subarray(Math.max(0, binary.length - 2048)).toString("latin1");
-  if (!tail.includes("%%EOF")) return false;
-
-  const head = binary.subarray(0, Math.min(binary.length, 4096)).toString("latin1");
-  return head.includes("xref") || head.includes("/XRef") || head.includes("/Type /Catalog");
-}
 
 async function resizePdfToPaperSize(binary: Buffer, paperSize: PaperSize) {
   const source = await PDFDocument.load(binary, { ignoreEncryption: true });
@@ -916,14 +907,15 @@ if (mimeType.startsWith("image/")) {
   }
 
   if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
-    if (!isLikelyValidPdf(file.binary)) {
+    try {
+      return {
+        filename: ensurePdfFilename(file.filename),
+        mimeType: "application/pdf",
+        binary: await resizePdfToPaperSize(file.binary, paperSize),
+      };
+    } catch {
       throw new Error(`Uploaded PDF is not a valid PDF file: ${file.filename}`);
     }
-    return {
-      filename: ensurePdfFilename(file.filename),
-      mimeType: "application/pdf",
-      binary: await resizePdfToPaperSize(file.binary, paperSize),
-    };
   }
 
   if (
@@ -951,35 +943,6 @@ if (mimeType.startsWith("image/")) {
     ], paperSize),
   };
 }
-function extractFirstImageUrlFromHtml(html: string) {
-  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
-  if (!match) return "";
-  const candidate = match[1]?.trim() ?? "";
-  return /^https?:\/\//i.test(candidate) ? candidate : "";
-}
-
-async function buildInlineImageAttachment(payload: RequestPayload): Promise<BinaryAttachment | null> {
-  const html = typeof payload.html === "string" ? payload.html.trim() : "";
-  if (!html) return null;
-
-  const imageUrl = extractFirstImageUrlFromHtml(html);
-  if (!imageUrl) return null;
-
-  const response = await fetch(imageUrl, { cache: "no-store" });
-  if (!response.ok) return null;
-
-  const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || "application/octet-stream";
-  if (!mimeType.startsWith("image/")) return null;
-
-  const arrayBuffer = await response.arrayBuffer();
-  const extension = mimeType.split("/")[1] || "bin";
-  return {
-    filename: `fax-inline-image.${extension}`,
-    mimeType,
-    binary: Buffer.from(arrayBuffer),
-  };
-}
-
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   const arrayBuffer = new ArrayBuffer(buffer.length);
   const view = new Uint8Array(arrayBuffer);
