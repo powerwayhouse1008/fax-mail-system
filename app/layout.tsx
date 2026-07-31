@@ -16,10 +16,9 @@ export default function RootLayout({
   return (
      <html lang="ja">
       <body>
-        <div className="fixed left-4 top-4 z-50">
+        <div className="home-floating-link">
           <Link
             href="/"
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700"
           >
             ← ホームページ
           </Link>

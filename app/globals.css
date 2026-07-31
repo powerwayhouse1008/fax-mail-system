@@ -133,6 +133,37 @@ body {
   background: #f8fafc;
 }
 
+.home-floating-link {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 60;
+}
+
+.home-floating-link a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 0.42rem 0.7rem;
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(8px);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
+}
+
+.home-floating-link a:hover {
+  border-color: #94a3b8;
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
 .language-switcher {
   position: fixed;
   right: 1rem;
