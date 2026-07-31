@@ -5,8 +5,9 @@ import { signOut } from "next-auth/react";
 import AuthGuard from "../components/auth-guard";
 import { useEffect, useMemo, useState } from "react";
 import type { SessionUser } from "../lib/auth";
+import { LANGUAGE_CHANGE_EVENT, LANGUAGE_STORAGE_KEY } from "../components/language-switcher";
 
-type Locale = "en" | "ja" | "vi";
+type Locale = "en" | "ja" | "vi" | "zh";
 
 type DashboardAction = {
   title: string;
@@ -17,7 +18,11 @@ type DashboardAction = {
 
 const detectLocale = (): Locale => {
   if (typeof window === "undefined") return "en";
+  const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (saved === "en" || saved === "ja" || saved === "vi" || saved === "zh") return saved;
+
   const language = window.navigator.language.toLowerCase();
+  if (language.startsWith("zh")) return "zh";
   if (language.startsWith("vi")) return "vi";
   if (language.startsWith("ja")) return "ja";
   return "en";
@@ -172,6 +177,51 @@ const translations: Record<
       },
     ],
   },
+  zh: {
+    heading: "发送菜单",
+    description: "请选择创建模板、发送文档或查看发送记录的功能。",
+    logout: "退出登录",
+    actions: [
+      {
+        title: "看房传真",
+        description: "创建传真封面模板，并附上名片进行批量传真发送。",
+        href: "/fax-template?channel=fax",
+        cta: "创建传真封面",
+      },
+      {
+        title: "文档传真",
+        description: "上传 PDF、图片或文档，并通过 Fax API 发送完整文件。",
+        href: "/document-fax",
+        cta: "打开文档传真",
+      },
+      {
+        title: "Gmail 发送",
+        description: "创建用于 Gmail 发送的模板。",
+        href: "/fax-template?channel=gmail",
+        cta: "创建 Gmail 模板",
+      },
+      {
+        title: "发送记录",
+        description: "在一个列表中查看 FAX 和 Gmail 的发送记录。",
+        href: "/send-history",
+        cta: "查看发送记录",
+      },
+    ],
+    adminActions: [
+      {
+        title: "管理员首页",
+        description: "打开管理员账号管理页面。",
+        href: "/admin",
+        cta: "打开管理员首页",
+      },
+      {
+        title: "数据收集",
+        description: "使用 Powerway Data Spider 分析 URL 并收集联系人。",
+        href: "/admin/data-spider",
+        cta: "打开数据收集",
+      },
+    ],
+  },
 };
 
 export default function DashboardPage() {
@@ -180,6 +230,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLocale(detectLocale());
+    const handleLocaleChange = (event: Event) => {
+      const nextLocale = (event as CustomEvent<{ locale?: Locale }>).detail?.locale;
+      if (nextLocale && translations[nextLocale]) setLocale(nextLocale);
+    };
+    window.addEventListener(LANGUAGE_CHANGE_EVENT, handleLocaleChange);
+
     let mounted = true;
 
     const loadSession = async () => {
@@ -194,6 +250,7 @@ export default function DashboardPage() {
 
     return () => {
       mounted = false;
+      window.removeEventListener(LANGUAGE_CHANGE_EVENT, handleLocaleChange);
     };
   }, []);
 

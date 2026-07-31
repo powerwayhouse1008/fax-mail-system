@@ -622,11 +622,24 @@ function replaceExtension(filename: string, extension: string) {
   const withoutExtension = filename.replace(/\.[^./\\]+$/, "");
   return `${withoutExtension}${extension}`;
 }
+
+function toSafeFaxFilename(filename: string) {
+  const asciiName = filename
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
+    .slice(0, 80);
+
+  return asciiName || "fax-content";
+}
+
 function ensurePdfFilename(filename: string) {
   const trimmed = filename.trim();
   const leaf = trimmed.split(/[\\/]/).pop() ?? "";
   const withoutQuery = leaf.split(/[?#]/)[0] ?? "";
-  const normalized = withoutQuery.trim();
+  const normalized = toSafeFaxFilename(withoutQuery.trim());
   if (!normalized) return "fax-content.pdf";
 
   const pdfNamed = /\.pdf$/i.test(normalized) ? normalized : replaceExtension(normalized, ".pdf");

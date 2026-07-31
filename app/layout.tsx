@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import LanguageSwitcher from "./components/language-switcher";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default function RootLayout({
           </Link>
         </div>
         {children}
+        <LanguageSwitcher />
       </body>
     </html>
   );

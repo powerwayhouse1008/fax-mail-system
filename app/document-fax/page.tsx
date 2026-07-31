@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import AuthGuard from "../components/auth-guard";
+import { LANGUAGE_CHANGE_EVENT, LANGUAGE_STORAGE_KEY } from "../components/language-switcher";
 import { appendSendHistory } from "../send-history/history-store";
 
-type Locale = "en" | "ja" | "vi";
+type Locale = "en" | "ja" | "vi" | "zh";
 
 type UploadedDocument = {
   filename: string;
@@ -93,12 +94,38 @@ const translations = {
     sendFailed: "G\u1eedi fax th\u1ea5t b\u1ea1i",
     recipientsUnit: "s\u1ed1 fax",
   },
+  zh: {
+    title: "文档传真",
+    description: "上传多个文件并通过 Fax API 发送，让收件人收到完整的文档内容。",
+    backToDashboard: "返回仪表板",
+    faxNumbersLabel: "收件传真号码（每行一个）",
+    documentLabel: "要发送的文档",
+    emptyDocument: "尚未上传文档。",
+    uploading: "正在上传...",
+    openDocument: "打开文档",
+    subjectLabel: "主题",
+    defaultSubject: "文档传真",
+    sendButton: "发送文档传真",
+    sendingButton: "正在发送...",
+    missingDocument: "发送传真前请至少上传一个文档。",
+    missingFaxNumber: "请至少输入一个传真号码。",
+    uploadFailed: "文件上传失败",
+    sendPartial: "传真发送未完全完成。",
+    sendSuccess: "已将文档发送到 Fax API，数量:",
+    sendFailed: "传真发送失败",
+    recipientsUnit: "个传真号码",
+  },
 } as const;
 
 const detectLocale = (): Locale => {
   if (typeof window === "undefined") return "ja";
+  const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (saved === "en" || saved === "ja" || saved === "vi" || saved === "zh") return saved;
+
   const language = window.navigator.language.toLowerCase();
+  if (language.startsWith("en")) return "en";
   if (language.startsWith("vi")) return "vi";
+  if (language.startsWith("zh")) return "zh";
   if (language.startsWith("ja")) return "ja";
   return "ja";
 };
@@ -154,6 +181,15 @@ export default function DocumentFaxPage() {
 
   useEffect(() => {
     setLocale(detectLocale());
+    const handleLocaleChange = (event: Event) => {
+      const nextLocale = (event as CustomEvent<{ locale?: Locale }>).detail?.locale;
+      if (nextLocale && translations[nextLocale]) setLocale(nextLocale);
+    };
+    window.addEventListener(LANGUAGE_CHANGE_EVENT, handleLocaleChange);
+
+    return () => {
+      window.removeEventListener(LANGUAGE_CHANGE_EVENT, handleLocaleChange);
+    };
   }, []);
 
   useEffect(() => {
