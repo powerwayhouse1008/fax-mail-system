@@ -12,6 +12,7 @@ type UploadedDocument = {
   filename: string;
   type: string;
   url: string;
+  content: string;
 };
 
 type UploadResponse = {
@@ -142,6 +143,20 @@ const isImageDocument = (document: UploadedDocument) =>
 const isPdfDocument = (document: UploadedDocument) =>
   document.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(document.filename);
 
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("File could not be read."));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("File could not be read."));
+    reader.readAsDataURL(file);
+  });
+
 const createShortJapaneseError = (value: unknown) => {
   const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
   if (!raw.trim()) return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
@@ -224,6 +239,7 @@ export default function DocumentFaxPage() {
     try {
       const uploadedDocuments = await Promise.all(
         files.map(async (file) => {
+          const content = await readFileAsDataUrl(file);
           const formData = new FormData();
           formData.append("file", file);
           formData.append("channel", "fax");
@@ -244,6 +260,7 @@ export default function DocumentFaxPage() {
             filename: payload.filename || file.name,
             type: payload.contentType || file.type || "application/octet-stream",
             url: payload.url,
+            content,
           };
         }),
       );
@@ -284,6 +301,7 @@ export default function DocumentFaxPage() {
           text: resolvedSubject,
           attachments: documents.map((document) => ({
               filename: document.filename,
+              content: document.content,
               url: document.url,
               type: isPdfDocument(document) ? "application/pdf" : document.type,
           })),

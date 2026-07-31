@@ -917,16 +917,7 @@ if (mimeType.startsWith("image/")) {
 
   if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
     if (!isLikelyValidPdf(file.binary)) {
-      return {
-        filename: replaceExtension(file.filename, ".pdf"),
-        mimeType: "application/pdf",
-        binary: createSimplePdf([
-          "アップロードされたPDFを検証したところ、FAX送信APIで受理されない形式でした。",
-          `元ファイル名: ${file.filename}`,
-          "",
-          "PDFを再保存（印刷→PDF）して再アップロードしてください。",
-        ], paperSize),
-      };
+      throw new Error(`Uploaded PDF is not a valid PDF file: ${file.filename}`);
     }
     return {
       filename: ensurePdfFilename(file.filename),
