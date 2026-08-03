@@ -158,8 +158,16 @@ const createShortJapaneseError = (value: unknown) => {
     return "FAX API\u304c\u539f\u7a3f\u30b5\u30a4\u30ba\u3092\u53d7\u3051\u4ed8\u3051\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u5225\u306ePDF\u307e\u305f\u306f\u753b\u50cf\u3067\u304a\u8a66\u3057\u304f\u3060\u3055\u3044\u3002";
   }
 
-  if (/NEXLINK_API_TOKEN|API_TOKEN|token/i.test(raw)) {
+  if (
+    /configuration is missing|NEXLINK_API_TOKEN が未設定|NEXLINK_API_TOKEN .*missing|Set NEXLINK_API_TOKEN/i.test(
+      raw,
+    )
+  ) {
     return "FAX API\u306e\u8a2d\u5b9a\u304c\u672a\u5b8c\u4e86\u3067\u3059\u3002";
+  }
+
+  if (/401|403|unauthorized|forbidden|authentication|authorization/i.test(raw)) {
+    return "FAX API\u306e\u8a8d\u8a3c\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
   }
 
   if (/\u6709\u52b9\u306aFAX|fax/i.test(raw) && /\u756a\u53f7|number/i.test(raw)) {
