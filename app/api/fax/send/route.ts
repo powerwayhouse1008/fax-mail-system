@@ -656,6 +656,10 @@ function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
 
+function isEncryptedPdfBinary(binary: Buffer) {
+  return binary.includes(Buffer.from("/Encrypt", "ascii"));
+}
+
 function getBrowserPdfPrinter() {
   const candidates =
     process.platform === "win32"
@@ -1006,7 +1010,11 @@ async function ensurePdfAttachment(
           ),
         };
       } catch {
-        // Fall back to the original A4 PDF below when no local printer is available.
+        if (isEncryptedPdfBinary(file.binary)) {
+          throw new Error(
+            "Encrypted PDF could not be converted to a fax-safe PDF. Please re-save or print the PDF to a new PDF file, then send again.",
+          );
+        }
       }
 
       try {
@@ -1140,20 +1148,15 @@ function toUserFacingFaxError(value: string) {
   ) {
     return "FAX APIが原稿サイズを受け付けませんでした。別のPDFまたは画像でお試しください。";
   }
-
-  if (/PDFアップロード|upload/i.test(haystack)) {
-    return "PDFのアップロードに失敗しました。ファイルを確認してください。";
-  }
-
-  if (/NEXLINK_API_TOKEN|API_TOKEN|token/i.test(haystack)) {
-    return "FAX APIの設定が未完了です。";
+  if (/configuration is missing|NEXLINK_API_TOKEN .*missing|Set NEXLINK_API_TOKEN|NEXLINK_API_TOKEN .*未設定/i.test(haystack)) {
+    return "FAX API configuration is missing. Set NEXLINK_API_TOKEN and restart the server.";
   }
 
   if (/有効なFAX|FAX番号|fax number/i.test(haystack)) {
     return "FAX番号を確認してください。";
   }
 
-  return raw.length > 90 ? "FAX送信に失敗しました。ファイルと送信先を確認してください。" : raw;
+  return raw.length > 240 ? raw.slice(0, 240) + "..." : raw;
 }
 
 async function createContactList(

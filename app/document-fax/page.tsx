@@ -175,10 +175,6 @@ const createShortJapaneseError = (value: unknown) => {
     return "FAX\u756a\u53f7\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002";
   }
 
-  if (/\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9|upload/i.test(raw)) {
-    return "\u30d5\u30a1\u30a4\u30eb\u306e\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
-  }
-
   return normalizedRaw.length > 180
     ? `${normalizedRaw.slice(0, 180)}...`
     : normalizedRaw;
