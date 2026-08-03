@@ -650,6 +650,24 @@ function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
 
+async function isAlreadyA4PortraitPdf(binary: Buffer, paperSize: PaperSize) {
+  const source = await PDFDocument.load(binary, { ignoreEncryption: true });
+  const pageBox = createPageBox(paperSize);
+  const tolerance = 2;
+
+  if (source.getPageCount() === 0) return false;
+
+  return source.getPages().every((page) => {
+    const { width, height } = page.getSize();
+    const rotation = Math.abs(page.getRotation().angle % 180);
+    return (
+      rotation === 0 &&
+      Math.abs(width - pageBox.width) <= tolerance &&
+      Math.abs(height - pageBox.height) <= tolerance
+    );
+  });
+}
+
 async function resizePdfToPaperSize(binary: Buffer, paperSize: PaperSize) {
   const source = await PDFDocument.load(binary, { ignoreEncryption: true });
   const target = await PDFDocument.create();
@@ -913,8 +931,21 @@ if (mimeType.startsWith("image/")) {
         mimeType: "application/pdf",
         binary: await resizePdfToPaperSize(file.binary, paperSize),
       };
-    } catch {
-      throw new Error(`Uploaded PDF is not a valid PDF file: ${file.filename}`);
+    } catch (error) {
+      try {
+        if (await isAlreadyA4PortraitPdf(file.binary, paperSize)) {
+          return {
+            filename: ensurePdfFilename(file.filename),
+            mimeType: "application/pdf",
+            binary: file.binary,
+          };
+        }
+      } catch {
+        // Keep the original conversion error below; it is more useful to users.
+      }
+
+      const detail = error instanceof Error ? ` (${error.message})` : "";
+      throw new Error(`Uploaded PDF is not a valid PDF file: ${file.filename}${detail}`);
     }
   }
 
