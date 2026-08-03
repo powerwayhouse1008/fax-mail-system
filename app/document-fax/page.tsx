@@ -22,6 +22,10 @@ type SendResponse = {
   error?: string;
 };
 
+const FAX_IMAGE_MAX_WIDTH = 1240;
+const FAX_IMAGE_MAX_HEIGHT = 1754;
+const FAX_IMAGE_QUALITY = 0.86;
+
 const translations = {
   en: {
     title: "Document fax",
@@ -136,6 +140,12 @@ const isImageDocument = (document: UploadedDocument) =>
 const isPdfDocument = (document: UploadedDocument) =>
   document.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(document.filename);
 
+const isRasterImageFile = (file: File) =>
+  file.type.startsWith("image/") || /\.(png|jpe?g|jfif)$/i.test(file.name);
+
+const replaceFileExtension = (filename: string, extension: string) =>
+  filename.replace(/\.[^./\\]+$/, "") + extension;
+
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -149,6 +159,51 @@ const readFileAsDataUrl = (file: File) =>
     reader.onerror = () => reject(reader.error ?? new Error("File could not be read."));
     reader.readAsDataURL(file);
   });
+
+const loadImage = (src: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Image could not be prepared for fax."));
+    image.src = src;
+  });
+
+const prepareImageForFax = async (file: File) => {
+  const source = await readFileAsDataUrl(file);
+  const image = await loadImage(source);
+  const scale = Math.min(
+    1,
+    FAX_IMAGE_MAX_WIDTH / image.naturalWidth,
+    FAX_IMAGE_MAX_HEIGHT / image.naturalHeight,
+  );
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Image could not be prepared for fax.");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  return {
+    filename: replaceFileExtension(file.name, ".jpg"),
+    type: "image/jpeg",
+    content: canvas.toDataURL("image/jpeg", FAX_IMAGE_QUALITY),
+  };
+};
+
+const readSendResponse = async (response: Response): Promise<SendResponse> => {
+  const rawText = await response.text();
+  if (!rawText.trim()) return {};
+
+  try {
+    return JSON.parse(rawText) as SendResponse;
+  } catch {
+    return { error: rawText.trim() };
+  }
+};
 
 const createShortJapaneseError = (value: unknown) => {
   const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
@@ -217,12 +272,18 @@ export default function DocumentFaxPage() {
     try {
       const uploadedDocuments = await Promise.all(
         files.map(async (file) => {
-          const content = await readFileAsDataUrl(file);
+          const prepared = isRasterImageFile(file)
+            ? await prepareImageForFax(file)
+            : {
+                filename: file.name,
+                type: file.type || "application/octet-stream",
+                content: await readFileAsDataUrl(file),
+              };
           return {
-            filename: file.name,
-            type: file.type || "application/octet-stream",
-            url: content,
-            content,
+            filename: prepared.filename,
+            type: prepared.type,
+            url: prepared.content,
+            content: prepared.content,
           };
         }),
       );
@@ -273,7 +334,7 @@ export default function DocumentFaxPage() {
         }),
       });
 
-      const payload = (await response.json()) as SendResponse;
+      const payload = await readSendResponse(response);
       const failed = Array.isArray(payload.failed) ? payload.failed : [];
       const failedRecipients = new Set(
         failed.filter((item) => typeof item.to === "string").map((item) => item.to as string),
