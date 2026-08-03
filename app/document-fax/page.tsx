@@ -143,6 +143,8 @@ const isPdfDocument = (document: UploadedDocument) =>
 const isRasterImageFile = (file: File) =>
   file.type.startsWith("image/") || /\.(png|jpe?g|jfif)$/i.test(file.name);
 
+const isPdfFile = (file: File) => file.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(file.name);
+
 const replaceFileExtension = (filename: string, extension: string) =>
   filename.replace(/\.[^./\\]+$/, "") + extension;
 
@@ -192,6 +194,65 @@ const prepareImageForFax = async (file: File) => {
     type: "image/jpeg",
     content: canvas.toDataURL("image/jpeg", FAX_IMAGE_QUALITY),
   };
+};
+
+const preparePdfForFax = async (file: File) => {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(await file.arrayBuffer()),
+    disableWorker: true,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  } as Parameters<typeof pdfjs.getDocument>[0] & { disableWorker: boolean });
+  const pdf = await loadingTask.promise;
+  const documents: Omit<UploadedDocument, "url">[] = [];
+  const baseFilename = file.name.replace(/\.[^./\\]+$/, "");
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(FAX_IMAGE_MAX_WIDTH / viewport.width, FAX_IMAGE_MAX_HEIGHT / viewport.height);
+    const scaledViewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(scaledViewport.width));
+    canvas.height = Math.max(1, Math.round(scaledViewport.height));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("PDF could not be prepared for fax.");
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+
+    documents.push({
+      filename: `${baseFilename}-page-${pageNumber}.jpg`,
+      type: "image/jpeg",
+      content: canvas.toDataURL("image/jpeg", FAX_IMAGE_QUALITY),
+    });
+  }
+
+  await pdf.destroy();
+  return documents;
+};
+
+const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
+  const preparedDocuments = isPdfFile(file)
+    ? await preparePdfForFax(file)
+    : [
+        isRasterImageFile(file)
+          ? await prepareImageForFax(file)
+          : {
+              filename: file.name,
+              type: file.type || "application/octet-stream",
+              content: await readFileAsDataUrl(file),
+            },
+      ];
+
+  return preparedDocuments.map((document) => ({
+    ...document,
+    url: document.content,
+  }));
 };
 
 const readSendResponse = async (response: Response): Promise<SendResponse> => {
@@ -270,24 +331,8 @@ export default function DocumentFaxPage() {
 
     setIsUploading(true);
     try {
-      const uploadedDocuments = await Promise.all(
-        files.map(async (file) => {
-          const prepared = isRasterImageFile(file)
-            ? await prepareImageForFax(file)
-            : {
-                filename: file.name,
-                type: file.type || "application/octet-stream",
-                content: await readFileAsDataUrl(file),
-              };
-          return {
-            filename: prepared.filename,
-            type: prepared.type,
-            url: prepared.content,
-            content: prepared.content,
-          };
-        }),
-      );
-      setDocuments(uploadedDocuments);
+      const uploadedDocumentGroups = await Promise.all(files.map(prepareFileForFax));
+      setDocuments(uploadedDocumentGroups.flat());
     } catch (error) {
       setMessage({
         type: "error",
