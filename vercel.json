@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "app/api/fax/send/route.ts": {
+      "includeFiles": "node_modules/@sparticuz/chromium/bin/**",
+      "maxDuration": 60
+    }
+  }
+}
