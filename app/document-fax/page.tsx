@@ -252,14 +252,13 @@ export default function DocumentFaxPage() {
           });
           const payload = (await response.json()) as UploadResponse;
 
-          if (!response.ok || !payload.url) {
-            throw new Error(payload.error || "Upload failed");
-          }
-
           return {
-            filename: payload.filename || file.name,
-            type: payload.contentType || file.type || "application/octet-stream",
-            url: payload.url,
+            filename: response.ok && payload.filename ? payload.filename : file.name,
+            type:
+              response.ok && payload.contentType
+                ? payload.contentType
+                : file.type || "application/octet-stream",
+            url: response.ok && payload.url ? payload.url : content,
             content,
           };
         }),
