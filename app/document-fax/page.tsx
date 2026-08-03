@@ -198,14 +198,14 @@ const prepareImageForFax = async (file: File) => {
 
 const preparePdfForFax = async (file: File) => {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(await file.arrayBuffer()),
-    disableWorker: true,
     useWorkerFetch: false,
     isEvalSupported: false,
     useSystemFonts: true,
-  } as Parameters<typeof pdfjs.getDocument>[0] & { disableWorker: boolean });
+  });
   const pdf = await loadingTask.promise;
   const documents: Omit<UploadedDocument, "url">[] = [];
   const baseFilename = file.name.replace(/\.[^./\\]+$/, "");
