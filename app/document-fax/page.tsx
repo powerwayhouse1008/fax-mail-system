@@ -153,6 +153,7 @@ const readFileAsDataUrl = (file: File) =>
 const createShortJapaneseError = (value: unknown) => {
   const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
   if (!raw.trim()) return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
+  const normalizedRaw = raw.trim();
 
   if (/0050002|\u7528\u7d19\u30b5\u30a4\u30ba|\\u7528\\u7d19\\u30b5\\u30a4\\u30ba|A4|A3|B4/.test(raw)) {
     return "FAX API\u304c\u539f\u7a3f\u30b5\u30a4\u30ba\u3092\u53d7\u3051\u4ed8\u3051\u307e\u305b\u3093\u3067\u3057\u305f\u3002\u5225\u306ePDF\u307e\u305f\u306f\u753b\u50cf\u3067\u304a\u8a66\u3057\u304f\u3060\u3055\u3044\u3002";
@@ -178,7 +179,9 @@ const createShortJapaneseError = (value: unknown) => {
     return "\u30d5\u30a1\u30a4\u30eb\u306e\u30a2\u30c3\u30d7\u30ed\u30fc\u30c9\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
   }
 
-  return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002\u5185\u5bb9\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002";
+  return normalizedRaw.length > 180
+    ? `${normalizedRaw.slice(0, 180)}...`
+    : normalizedRaw;
 };
 
 export default function DocumentFaxPage() {

@@ -865,6 +865,28 @@ async function createImagePdf(
 
   return Buffer.from(await target.save({ useObjectStreams: false }));
 }
+
+async function combinePdfAttachments(files: BinaryAttachment[]): Promise<BinaryAttachment[]> {
+  if (files.length <= 1) return files;
+
+  const target = await PDFDocument.create();
+  for (const file of files) {
+    const source = await PDFDocument.load(file.binary, { ignoreEncryption: true });
+    const pages = await target.copyPages(source, source.getPageIndices());
+    for (const page of pages) {
+      target.addPage(page);
+    }
+  }
+
+  return [
+    {
+      filename: "fax-documents.pdf",
+      mimeType: "application/pdf",
+      binary: Buffer.from(await target.save({ useObjectStreams: false })),
+    },
+  ];
+}
+
 function htmlToPlainText(html: string) {
   return html
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -1446,7 +1468,9 @@ export async function POST(request: Request) {
           return attachmentFile ? ensurePdfAttachment(attachmentFile, paperSize) : null;
         }),
       );
-      pdfFiles = convertedFiles.filter((file): file is BinaryAttachment => Boolean(file));
+      pdfFiles = await combinePdfAttachments(
+        convertedFiles.filter((file): file is BinaryAttachment => Boolean(file)),
+      );
     } catch (error) {
       const message =
         error instanceof Error
