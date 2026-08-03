@@ -3,6 +3,7 @@ import { execFile } from "child_process";
 import { randomUUID } from "crypto";
 import { existsSync } from "fs";
 import { mkdir, readFile, rm, writeFile } from "fs/promises";
+import { tmpdir } from "os";
 import path from "path";
 import { pathToFileURL } from "url";
 import { PDFDocument, degrees } from "pdf-lib";
@@ -660,7 +661,7 @@ function isEncryptedPdfBinary(binary: Buffer) {
   return binary.includes(Buffer.from("/Encrypt", "ascii"));
 }
 
-function getBrowserPdfPrinter() {
+function getBrowserPdfPrinters() {
   const candidates =
     process.platform === "win32"
       ? [
@@ -672,60 +673,73 @@ function getBrowserPdfPrinter() {
         ]
       : [process.env.CHROME_PATH, "google-chrome", "chromium", "chromium-browser"];
 
-  return candidates.find((candidate): candidate is string => {
+  return candidates.filter((candidate): candidate is string => {
     if (!candidate?.trim()) return false;
     return process.platform === "win32" ? existsSync(candidate) : true;
   });
 }
 
 async function printPdfWithBrowser(binary: Buffer) {
-  const browserPath = getBrowserPdfPrinter();
-  if (!browserPath) {
+  const browserPaths = getBrowserPdfPrinters();
+  if (browserPaths.length === 0) {
     throw new Error("No browser PDF printer is available.");
   }
 
-  const workDir = path.join(process.cwd(), `.fax-pdf-render-${randomUUID()}`);
-  const inputPath = path.join(workDir, "input.pdf");
-  const outputPath = path.join(workDir, "output.pdf");
-  const userDataDir = path.join(workDir, "chrome-profile");
+  const failures: string[] = [];
 
-  try {
-    await mkdir(userDataDir, { recursive: true });
-    await writeFile(inputPath, binary);
+  for (const browserPath of browserPaths) {
+    const workDir = path.join(tmpdir(), `fax-pdf-render-${randomUUID()}`);
+    const inputPath = path.join(workDir, "input.pdf");
+    const outputPath = path.join(workDir, "output.pdf");
+    const userDataDir = path.join(workDir, "browser-profile");
 
-    await new Promise<void>((resolve, reject) => {
-      const child = execFile(
-        browserPath,
-        [
-          "--headless",
-          "--disable-gpu",
-          "--no-sandbox",
-          "--disable-crash-reporter",
-          `--user-data-dir=${userDataDir}`,
-          `--print-to-pdf=${outputPath}`,
-          pathToFileURL(inputPath).toString(),
-        ],
-        { timeout: 30_000 },
-        (error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        },
-      );
+    try {
+      await mkdir(userDataDir, { recursive: true });
+      await writeFile(inputPath, binary);
 
-      child.stdin?.end();
-    });
+      await new Promise<void>((resolve, reject) => {
+        const child = execFile(
+          browserPath,
+          [
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-crash-reporter",
+            "--disable-extensions",
+            "--run-all-compositor-stages-before-draw",
+            "--virtual-time-budget=1000",
+            `--user-data-dir=${userDataDir}`,
+            `--print-to-pdf=${outputPath}`,
+            pathToFileURL(inputPath).toString(),
+          ],
+          { timeout: 45_000 },
+          (error, _stdout, stderr) => {
+            if (error) {
+              const detail = stderr?.trim() ? `${error.message}: ${stderr.trim()}` : error.message;
+              reject(new Error(detail));
+              return;
+            }
+            resolve();
+          },
+        );
 
-    const printed = await readFile(outputPath);
-    if (!isPdfBinary(printed)) {
-      throw new Error("Browser did not create a valid PDF.");
+        child.stdin?.end();
+      });
+
+      const printed = await readFile(outputPath);
+      if (!isPdfBinary(printed)) {
+        throw new Error("Browser did not create a valid PDF.");
+      }
+      return printed;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push(`${path.basename(browserPath)}: ${message}`);
+    } finally {
+      await rm(workDir, { recursive: true, force: true });
     }
-    return printed;
-  } finally {
-    await rm(workDir, { recursive: true, force: true });
   }
+
+  throw new Error(`Browser PDF conversion failed. ${failures.join(" | ")}`);
 }
 
 async function isAlreadyA4PortraitPdf(binary: Buffer, paperSize: PaperSize) {
@@ -1009,10 +1023,11 @@ async function ensurePdfAttachment(
             paperSize,
           ),
         };
-      } catch {
+      } catch (browserError) {
         if (isEncryptedPdfBinary(file.binary)) {
+          const detail = browserError instanceof Error ? ` ${browserError.message}` : "";
           throw new Error(
-            "Encrypted PDF could not be converted to a fax-safe PDF. Please re-save or print the PDF to a new PDF file, then send again.",
+            `Encrypted PDF could not be converted to a fax-safe PDF automatically.${detail}`,
           );
         }
       }
