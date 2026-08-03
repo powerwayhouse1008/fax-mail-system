@@ -15,13 +15,6 @@ type UploadedDocument = {
   content: string;
 };
 
-type UploadResponse = {
-  url?: string;
-  filename?: string;
-  contentType?: string;
-  error?: string;
-};
-
 type SendResponse = {
   total?: number;
   successCount?: number;
@@ -157,14 +150,6 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const readUploadResponse = async (response: Response): Promise<UploadResponse> => {
-  try {
-    return (await response.json()) as UploadResponse;
-  } catch {
-    return {};
-  }
-};
-
 const createShortJapaneseError = (value: unknown) => {
   const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
   if (!raw.trim()) return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
@@ -190,7 +175,6 @@ const createShortJapaneseError = (value: unknown) => {
 
 export default function DocumentFaxPage() {
   const [locale, setLocale] = useState<Locale>("ja");
-  const [scope, setScope] = useState("guest");
   const [faxListInput, setFaxListInput] = useState("");
   const [subject, setSubject] = useState("");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
@@ -215,27 +199,6 @@ export default function DocumentFaxPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadSession = async () => {
-      try {
-        const response = await fetch("/api/auth/session", { cache: "no-store" });
-        if (!response.ok || !mounted) return;
-        const session = (await response.json()) as { user?: { username?: string } };
-        setScope(session.user?.username?.trim() || "guest");
-      } catch {
-        setScope("guest");
-      }
-    };
-
-    loadSession();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     setDocuments([]);
@@ -248,33 +211,10 @@ export default function DocumentFaxPage() {
       const uploadedDocuments = await Promise.all(
         files.map(async (file) => {
           const content = await readFileAsDataUrl(file);
-          let payload: UploadResponse = {};
-          let uploaded = false;
-
-          try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("channel", "fax");
-            formData.append("scope", scope);
-            formData.append("category", "documents");
-
-            const response = await fetch("/api/storage/upload", {
-              method: "POST",
-              body: formData,
-            });
-            payload = await readUploadResponse(response);
-            uploaded = response.ok && Boolean(payload.url);
-          } catch {
-            uploaded = false;
-          }
-
           return {
-            filename: uploaded && payload.filename ? payload.filename : file.name,
-            type:
-              uploaded && payload.contentType
-                ? payload.contentType
-                : file.type || "application/octet-stream",
-            url: uploaded && payload.url ? payload.url : content,
+            filename: file.name,
+            type: file.type || "application/octet-stream",
+            url: content,
             content,
           };
         }),
