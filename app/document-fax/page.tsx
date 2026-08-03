@@ -157,6 +157,14 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+const readUploadResponse = async (response: Response): Promise<UploadResponse> => {
+  try {
+    return (await response.json()) as UploadResponse;
+  } catch {
+    return {};
+  }
+};
+
 const createShortJapaneseError = (value: unknown) => {
   const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
   if (!raw.trim()) return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
@@ -240,25 +248,33 @@ export default function DocumentFaxPage() {
       const uploadedDocuments = await Promise.all(
         files.map(async (file) => {
           const content = await readFileAsDataUrl(file);
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("channel", "fax");
-          formData.append("scope", scope);
-          formData.append("category", "documents");
+          let payload: UploadResponse = {};
+          let uploaded = false;
 
-          const response = await fetch("/api/storage/upload", {
-            method: "POST",
-            body: formData,
-          });
-          const payload = (await response.json()) as UploadResponse;
+          try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("channel", "fax");
+            formData.append("scope", scope);
+            formData.append("category", "documents");
+
+            const response = await fetch("/api/storage/upload", {
+              method: "POST",
+              body: formData,
+            });
+            payload = await readUploadResponse(response);
+            uploaded = response.ok && Boolean(payload.url);
+          } catch {
+            uploaded = false;
+          }
 
           return {
-            filename: response.ok && payload.filename ? payload.filename : file.name,
+            filename: uploaded && payload.filename ? payload.filename : file.name,
             type:
-              response.ok && payload.contentType
+              uploaded && payload.contentType
                 ? payload.contentType
                 : file.type || "application/octet-stream",
-            url: response.ok && payload.url ? payload.url : content,
+            url: uploaded && payload.url ? payload.url : content,
             content,
           };
         }),
