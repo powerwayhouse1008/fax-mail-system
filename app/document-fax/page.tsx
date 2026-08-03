@@ -24,7 +24,12 @@ type SendResponse = {
 
 const FAX_IMAGE_MAX_WIDTH = 1240;
 const FAX_IMAGE_MAX_HEIGHT = 1754;
+const FAX_PDF_RENDER_MAX_WIDTH = 2480;
+const FAX_PDF_RENDER_MAX_HEIGHT = 3508;
 const FAX_IMAGE_QUALITY = 0.86;
+const WHITE_PIXEL_THRESHOLD = 248;
+const PDF_CROP_MARGIN = 32;
+const SMALL_PDF_CONTENT_RATIO = 0.55;
 
 const translations = {
   en: {
@@ -170,6 +175,79 @@ const loadImage = (src: string) =>
     image.src = src;
   });
 
+const getNonWhiteBounds = (context: CanvasRenderingContext2D, width: number, height: number) => {
+  const pixels = context.getImageData(0, 0, width, height).data;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = (y * width + x) * 4;
+      const alpha = pixels[index + 3];
+      if (alpha === 0) continue;
+
+      const red = pixels[index];
+      const green = pixels[index + 1];
+      const blue = pixels[index + 2];
+      if (red >= WHITE_PIXEL_THRESHOLD && green >= WHITE_PIXEL_THRESHOLD && blue >= WHITE_PIXEL_THRESHOLD) {
+        continue;
+      }
+
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return null;
+
+  return {
+    x: Math.max(0, minX - PDF_CROP_MARGIN),
+    y: Math.max(0, minY - PDF_CROP_MARGIN),
+    width: Math.min(width, maxX + PDF_CROP_MARGIN + 1) - Math.max(0, minX - PDF_CROP_MARGIN),
+    height: Math.min(height, maxY + PDF_CROP_MARGIN + 1) - Math.max(0, minY - PDF_CROP_MARGIN),
+  };
+};
+
+const createFaxJpegFromCanvas = (
+  sourceCanvas: HTMLCanvasElement,
+  sourceContext: CanvasRenderingContext2D,
+) => {
+  const bounds = getNonWhiteBounds(sourceContext, sourceCanvas.width, sourceCanvas.height) ?? {
+    x: 0,
+    y: 0,
+    width: sourceCanvas.width,
+    height: sourceCanvas.height,
+  };
+  const scale = Math.min(FAX_PDF_RENDER_MAX_WIDTH / bounds.width, FAX_PDF_RENDER_MAX_HEIGHT / bounds.height);
+  const width = Math.max(1, Math.round(bounds.width * Math.min(1, scale)));
+  const height = Math.max(1, Math.round(bounds.height * Math.min(1, scale)));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("PDF could not be prepared for fax.");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(sourceCanvas, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", FAX_IMAGE_QUALITY);
+};
+
+const createPdfDocumentFromOriginalFile = async (file: File) => {
+  const content = await readFileAsDataUrl(file);
+  return [
+    {
+      filename: file.name,
+      type: file.type || "application/pdf",
+      content,
+    },
+  ];
+};
+
 const prepareImageForFax = async (file: File) => {
   const source = await readFileAsDataUrl(file);
   const image = await loadImage(source);
@@ -209,11 +287,12 @@ const preparePdfForFax = async (file: File) => {
   const pdf = await loadingTask.promise;
   const documents: Omit<UploadedDocument, "url">[] = [];
   const baseFilename = file.name.replace(/\.[^./\\]+$/, "");
+  let shouldConvertToJpeg = false;
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1 });
-    const scale = Math.min(FAX_IMAGE_MAX_WIDTH / viewport.width, FAX_IMAGE_MAX_HEIGHT / viewport.height);
+    const scale = Math.min(FAX_PDF_RENDER_MAX_WIDTH / viewport.width, FAX_PDF_RENDER_MAX_HEIGHT / viewport.height);
     const scaledViewport = page.getViewport({ scale });
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(scaledViewport.width));
@@ -224,16 +303,28 @@ const preparePdfForFax = async (file: File) => {
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+    const contentBounds = getNonWhiteBounds(context, canvas.width, canvas.height);
+    const isSmallContentPdf =
+      contentBounds != null &&
+      contentBounds.width / canvas.width < SMALL_PDF_CONTENT_RATIO &&
+      contentBounds.height / canvas.height < SMALL_PDF_CONTENT_RATIO;
+
+    if (!isSmallContentPdf) {
+      await pdf.destroy();
+      return createPdfDocumentFromOriginalFile(file);
+    }
+
+    shouldConvertToJpeg = true;
 
     documents.push({
       filename: `${baseFilename}-page-${pageNumber}.jpg`,
       type: "image/jpeg",
-      content: canvas.toDataURL("image/jpeg", FAX_IMAGE_QUALITY),
+      content: createFaxJpegFromCanvas(canvas, context),
     });
   }
 
   await pdf.destroy();
-  return documents;
+  return shouldConvertToJpeg ? documents : createPdfDocumentFromOriginalFile(file);
 };
 
 const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
