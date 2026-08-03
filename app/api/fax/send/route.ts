@@ -1,4 +1,10 @@
 import { NextResponse } from "next/server";
+import { execFile } from "child_process";
+import { randomUUID } from "crypto";
+import { existsSync } from "fs";
+import { mkdir, readFile, rm, writeFile } from "fs/promises";
+import path from "path";
+import { pathToFileURL } from "url";
 import { PDFDocument, degrees } from "pdf-lib";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
@@ -650,6 +656,74 @@ function isPdfBinary(binary: Buffer) {
   return binary.subarray(0, 4).toString("ascii") === "%PDF";
 }
 
+function getBrowserPdfPrinter() {
+  const candidates =
+    process.platform === "win32"
+      ? [
+          process.env.CHROME_PATH,
+          "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+          "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+          "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+          "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+        ]
+      : [process.env.CHROME_PATH, "google-chrome", "chromium", "chromium-browser"];
+
+  return candidates.find((candidate): candidate is string => {
+    if (!candidate?.trim()) return false;
+    return process.platform === "win32" ? existsSync(candidate) : true;
+  });
+}
+
+async function printPdfWithBrowser(binary: Buffer) {
+  const browserPath = getBrowserPdfPrinter();
+  if (!browserPath) {
+    throw new Error("No browser PDF printer is available.");
+  }
+
+  const workDir = path.join(process.cwd(), `.fax-pdf-render-${randomUUID()}`);
+  const inputPath = path.join(workDir, "input.pdf");
+  const outputPath = path.join(workDir, "output.pdf");
+  const userDataDir = path.join(workDir, "chrome-profile");
+
+  try {
+    await mkdir(userDataDir, { recursive: true });
+    await writeFile(inputPath, binary);
+
+    await new Promise<void>((resolve, reject) => {
+      const child = execFile(
+        browserPath,
+        [
+          "--headless",
+          "--disable-gpu",
+          "--no-sandbox",
+          "--disable-crash-reporter",
+          `--user-data-dir=${userDataDir}`,
+          `--print-to-pdf=${outputPath}`,
+          pathToFileURL(inputPath).toString(),
+        ],
+        { timeout: 30_000 },
+        (error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        },
+      );
+
+      child.stdin?.end();
+    });
+
+    const printed = await readFile(outputPath);
+    if (!isPdfBinary(printed)) {
+      throw new Error("Browser did not create a valid PDF.");
+    }
+    return printed;
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
 async function isAlreadyA4PortraitPdf(binary: Buffer, paperSize: PaperSize) {
   const source = await PDFDocument.load(binary, { ignoreEncryption: true });
   const pageBox = createPageBox(paperSize);
@@ -757,83 +831,39 @@ ${xrefStart}
 `;
   return Buffer.from(output, "utf-8");
 }
-function createJpegPdf(imageBinary: Buffer, paperSize: PaperSize = DEFAULT_PAPER_SIZE) {
-  let width = 1200;
-  let height = 1600;
+async function createImagePdf(
+  imageBinary: Buffer,
+  mimeType: string,
+  paperSize: PaperSize = DEFAULT_PAPER_SIZE,
+) {
+  const target = await PDFDocument.create();
+  const normalizedMimeType = mimeType.toLowerCase();
+  const image =
+    normalizedMimeType === "image/png"
+      ? await target.embedPng(imageBinary)
+      : await target.embedJpg(imageBinary);
+  const pageBox = createPageBox(paperSize);
+  const page = target.addPage([pageBox.width, pageBox.height]);
+  const fit = fitPageContentToPortraitBox(image.width, image.height, pageBox);
 
-  for (let i = 0; i < imageBinary.length - 9; i += 1) {
-    if (imageBinary[i] === 0xff && imageBinary[i + 1] === 0xc0) {
-      height = imageBinary.readUInt16BE(i + 5);
-      width = imageBinary.readUInt16BE(i + 7);
-      break;
-    }
+  if (fit.shouldRotate) {
+    page.drawImage(image, {
+      x: fit.x + fit.drawHeight,
+      y: fit.y,
+      width: fit.drawWidth,
+      height: fit.drawHeight,
+      rotate: degrees(90),
+    });
+  } else {
+    page.drawImage(image, {
+      x: fit.x,
+      y: fit.y,
+      width: fit.drawWidth,
+      height: fit.drawHeight,
+    });
   }
 
-  const page = createPageBox(paperSize);
-  const pageWidth = page.width;
-  const pageHeight = page.height;
-  const fit = fitPageContentToPortraitBox(width, height, page);
-  const drawWidth = Math.max(1, Math.floor(fit.drawWidth));
-  const drawHeight = Math.max(1, Math.floor(fit.drawHeight));
-  const x = Math.floor(fit.x);
-  const y = Math.floor(fit.y);
-
-  const contentStream = fit.shouldRotate
-    ? `q 0 ${drawWidth} ${-drawHeight} 0 ${x + drawHeight} ${y} cm /Im0 Do Q`
-    : `q ${drawWidth} 0 0 ${drawHeight} ${x} ${y} cm /Im0 Do Q`;
-  const contentLength = Buffer.byteLength(contentStream, "utf-8");
-  const imageLength = imageBinary.length;
-
-  const objects: Buffer[] = [
-    Buffer.from(`1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
-`, "ascii"),
-    Buffer.from(`2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
-`, "ascii"),
-    Buffer.from(
-      `3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >> endobj
-`,
-      "ascii",
-    ),
-    Buffer.concat([
-      Buffer.from(
-        `4 0 obj << /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageLength} >> stream
-`,
-        "ascii",
-      ),
-      imageBinary,
-      Buffer.from(`
-endstream endobj
-`, "ascii"),
-       ]),
-    Buffer.from(`5 0 obj << /Length ${contentLength} >> stream
-${contentStream}
-endstream endobj
-`, "ascii"),
-  ];
-
-    let output = Buffer.from(`%PDF-1.4
-`, "ascii");
-  const offsets = [0];
-  for (const obj of objects) {
-    offsets.push(output.length);
-    output = Buffer.concat([output, obj]);
-  }
-
-  const xrefStart = output.length;
-  let xref = `xref
-0 ${objects.length + 1}
-0000000000 65535 f 
-`;
-  for (let i = 1; i < offsets.length; i += 1) {
-    xref += `${String(offsets[i]).padStart(10, "0")} 00000 n 
-`;
-  }
-  xref += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>
-startxref
-${xrefStart}
-%%EOF
-`;
-  return Buffer.concat([output, Buffer.from(xref, "ascii")]);
+  return Buffer.from(await target.save({ useObjectStreams: false }));
 }
 function htmlToPlainText(html: string) {
   return html
@@ -903,9 +933,38 @@ async function ensurePdfAttachment(
   paperSize: PaperSize,
 ): Promise<BinaryAttachment> {
   const mimeType = file.mimeType.toLowerCase();
-  
-if (mimeType.startsWith("image/")) {
-  if (mimeType === "image/jpeg" || mimeType === "image/jpg") {
+  const isJfifFile = /\.jfif$/i.test(file.filename);
+
+  if (mimeType.startsWith("image/") || isJfifFile) {
+    if (["image/jpeg", "image/jpg", "image/pjpeg", "image/png"].includes(mimeType)) {
+      try {
+        const embeddedMimeType = mimeType === "image/png" ? "image/png" : "image/jpeg";
+        return {
+          filename: replaceExtension(file.filename, ".pdf"),
+          mimeType: "application/pdf",
+          binary: await createImagePdf(file.binary, embeddedMimeType, paperSize),
+        };
+      } catch (error) {
+        const detail = error instanceof Error ? ` (${error.message})` : "";
+        throw new Error(`Uploaded image could not be converted to PDF: ${file.filename}${detail}`);
+      }
+    }
+
+    if (isJfifFile) {
+      try {
+        return {
+          filename: replaceExtension(file.filename, ".pdf"),
+          mimeType: "application/pdf",
+          binary: await createImagePdf(file.binary, "image/jpeg", paperSize),
+        };
+      } catch (error) {
+        const detail = error instanceof Error ? ` (${error.message})` : "";
+        throw new Error(`Uploaded image could not be converted to PDF: ${file.filename}${detail}`);
+      }
+    }
+
+    throw new Error(`Unsupported image type for fax: ${file.mimeType}`);
+  /*
       return {
         filename: replaceExtension(file.filename, ".pdf"),
         mimeType: "application/pdf",
@@ -922,6 +981,7 @@ if (mimeType.startsWith("image/")) {
         "PNG/HEIC等は未対応のため、PDF化して添付してください。",
       ], paperSize),
     };
+  */
   }
 
   if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
@@ -932,6 +992,19 @@ if (mimeType.startsWith("image/")) {
         binary: await resizePdfToPaperSize(file.binary, paperSize),
       };
     } catch (error) {
+      try {
+        return {
+          filename: ensurePdfFilename(file.filename),
+          mimeType: "application/pdf",
+          binary: await resizePdfToPaperSize(
+            await printPdfWithBrowser(file.binary),
+            paperSize,
+          ),
+        };
+      } catch {
+        // Fall back to the original A4 PDF below when no local printer is available.
+      }
+
       try {
         if (await isAlreadyA4PortraitPdf(file.binary, paperSize)) {
           return {
