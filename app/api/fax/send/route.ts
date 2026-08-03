@@ -707,12 +707,50 @@ function getBrowserPdfPrinters() {
   });
 }
 
+async function printPdfWithBundledChromium(binary: Buffer) {
+  const chromium = (await import("@sparticuz/chromium")).default;
+  const puppeteer = await import("puppeteer-core");
+  const workDir = path.join(tmpdir(), `fax-pdf-render-${randomUUID()}`);
+  const inputPath = path.join(workDir, "input.pdf");
+  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+
+  try {
+    await mkdir(workDir, { recursive: true });
+    await writeFile(inputPath, binary);
+
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
+    await page.goto(pathToFileURL(inputPath).toString(), {
+      waitUntil: "networkidle0",
+      timeout: 45_000,
+    });
+    const printed = Buffer.from(
+      await page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: false,
+      }),
+    );
+
+    if (!isPdfBinary(printed)) {
+      throw new Error("Bundled Chromium did not create a valid PDF.");
+    }
+
+    return printed;
+  } finally {
+    await browser?.close().catch(() => undefined);
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
 async function printPdfWithBrowser(binary: Buffer) {
   const browserPaths = getBrowserPdfPrinters();
-  if (browserPaths.length === 0) {
-    throw new Error("No browser PDF printer is available.");
-  }
-
   const failures: string[] = [];
 
   for (const browserPath of browserPaths) {
@@ -767,7 +805,18 @@ async function printPdfWithBrowser(binary: Buffer) {
     }
   }
 
-  throw new Error(`Browser PDF conversion failed. ${failures.join(" | ")}`);
+  try {
+    return await printPdfWithBundledChromium(binary);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    failures.push(`bundled-chromium: ${message}`);
+  }
+
+  throw new Error(
+    failures.length > 0
+      ? `Browser PDF conversion failed. ${failures.join(" | ")}`
+      : "No browser PDF printer is available.",
+  );
 }
 
 async function isAlreadyA4PortraitPdf(binary: Buffer, paperSize: PaperSize) {
