@@ -709,42 +709,51 @@ function getBrowserPdfPrinters() {
 
 async function printPdfWithBundledChromium(binary: Buffer) {
   const chromium = (await import("@sparticuz/chromium")).default;
-  const puppeteer = await import("puppeteer-core");
   const workDir = path.join(tmpdir(), `fax-pdf-render-${randomUUID()}`);
   const inputPath = path.join(workDir, "input.pdf");
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+  const outputPath = path.join(workDir, "output.pdf");
+  const userDataDir = path.join(workDir, "browser-profile");
 
   try {
-    await mkdir(workDir, { recursive: true });
+    await mkdir(userDataDir, { recursive: true });
     await writeFile(inputPath, binary);
+    const executablePath = await chromium.executablePath();
 
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: true,
+    await new Promise<void>((resolve, reject) => {
+      const child = execFile(
+        executablePath,
+        [
+          ...chromium.args,
+          "--headless=new",
+          "--disable-crash-reporter",
+          "--disable-extensions",
+          "--run-all-compositor-stages-before-draw",
+          "--virtual-time-budget=1000",
+          `--user-data-dir=${userDataDir}`,
+          `--print-to-pdf=${outputPath}`,
+          pathToFileURL(inputPath).toString(),
+        ],
+        { timeout: 45_000 },
+        (error, _stdout, stderr) => {
+          if (error) {
+            const detail = stderr?.trim() ? `${error.message}: ${stderr.trim()}` : error.message;
+            reject(new Error(detail));
+            return;
+          }
+          resolve();
+        },
+      );
+
+      child.stdin?.end();
     });
 
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
-    await page.goto(pathToFileURL(inputPath).toString(), {
-      waitUntil: "networkidle0",
-      timeout: 45_000,
-    });
-    const printed = Buffer.from(
-      await page.pdf({
-        format: "A4",
-        printBackground: true,
-        preferCSSPageSize: false,
-      }),
-    );
-
+    const printed = await readFile(outputPath);
     if (!isPdfBinary(printed)) {
       throw new Error("Bundled Chromium did not create a valid PDF.");
     }
 
     return printed;
   } finally {
-    await browser?.close().catch(() => undefined);
     await rm(workDir, { recursive: true, force: true });
   }
 }
