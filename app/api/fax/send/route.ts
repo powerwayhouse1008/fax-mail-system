@@ -661,6 +661,18 @@ function isEncryptedPdfBinary(binary: Buffer) {
   return binary.includes(Buffer.from("/Encrypt", "ascii"));
 }
 
+function commandExists(command: string) {
+  const pathValue = process.env.PATH || "";
+  const pathExts =
+    process.platform === "win32"
+      ? (process.env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";")
+      : [""];
+
+  return pathValue.split(path.delimiter).some((directory) =>
+    pathExts.some((extension) => existsSync(path.join(directory, `${command}${extension}`))),
+  );
+}
+
 function getBrowserPdfPrinters() {
   const candidates =
     process.platform === "win32"
@@ -671,11 +683,27 @@ function getBrowserPdfPrinters() {
           "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
           "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
         ]
-      : [process.env.CHROME_PATH, "google-chrome", "chromium", "chromium-browser"];
+      : [
+          process.env.CHROME_PATH,
+          "/usr/bin/google-chrome",
+          "/usr/bin/google-chrome-stable",
+          "/usr/bin/chromium",
+          "/usr/bin/chromium-browser",
+          "/snap/bin/chromium",
+          "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+          "/mnt/c/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+          "/mnt/c/Program Files/Microsoft/Edge/Application/msedge.exe",
+          "/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+          "google-chrome",
+          "google-chrome-stable",
+          "chromium",
+          "chromium-browser",
+        ];
 
   return candidates.filter((candidate): candidate is string => {
     if (!candidate?.trim()) return false;
-    return process.platform === "win32" ? existsSync(candidate) : true;
+    if (candidate.includes("/") || candidate.includes("\\")) return existsSync(candidate);
+    return commandExists(candidate);
   });
 }
 
