@@ -97,18 +97,18 @@ function readEnv(...keys: string[]) {
 
 function normalizeFaxNumber(value: string) {
   const normalized = value
-    .replace(/[０-９]/g, (char) =>
+    .replace(/[\uFF10-\uFF19]/g, (char) =>
       String.fromCharCode(char.charCodeAt(0) - 0xfee0),
     )
-    .replace(/[＋－（）]/g, (char) => {
+    .replace(/[\uFF0B\uFF0D\uFF08\uFF09]/g, (char) => {
       switch (char) {
-        case "＋":
+        case "\uFF0B":
           return "+";
-        case "－":
+        case "\uFF0D":
           return "-";
-        case "（":
+        case "\uFF08":
           return "(";
-        case "）":
+        case "\uFF09":
           return ")";
         default:
           return char;
@@ -964,24 +964,6 @@ async function ensurePdfAttachment(
     }
 
     throw new Error(`Unsupported image type for fax: ${file.mimeType}`);
-  /*
-      return {
-        filename: replaceExtension(file.filename, ".pdf"),
-        mimeType: "application/pdf",
-        binary: createJpegPdf(file.binary, paperSize),
-      };
-    }
-    return {
-      filename: replaceExtension(file.filename, ".pdf"),
-      mimeType: "application/pdf",
-      binary: createSimplePdf([
-        "画像ファイルを受信しました。",
-        `元ファイル名: ${file.filename}`,
-        "JPEG画像はそのままFAX送信用PDFに変換されます。",
-        "PNG/HEIC等は未対応のため、PDF化して添付してください。",
-      ], paperSize),
-    };
-  */
   }
 
   if (mimeType === "application/pdf" || isPdfBinary(file.binary)) {
@@ -1421,7 +1403,10 @@ export async function POST(request: Request) {
 
   if (!apiToken) {
     return NextResponse.json(
-      { error: "NEXLINK_API_TOKEN が未設定です。" },
+      {
+        error:
+          "FAX API configuration is missing. Set NEXLINK_API_TOKEN (or NEXILINK_API_TOKEN / NEXLINK_API_KEY / NEXILINK_API_KEY) in .env.local and restart the server.",
+      },
       { status: 500 },
     );
   }
