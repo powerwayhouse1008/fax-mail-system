@@ -22,11 +22,10 @@ type SendResponse = {
   error?: string;
 };
 
-const FAX_IMAGE_MAX_WIDTH = 1240;
-const FAX_IMAGE_MAX_HEIGHT = 1754;
+const FAX_IMAGE_MAX_WIDTH = 2480;
+const FAX_IMAGE_MAX_HEIGHT = 3508;
 const FAX_PDF_RENDER_MAX_WIDTH = 2480;
 const FAX_PDF_RENDER_MAX_HEIGHT = 3508;
-const FAX_IMAGE_QUALITY = 0.86;
 const WHITE_PIXEL_THRESHOLD = 248;
 const PDF_CROP_MARGIN = 32;
 const SMALL_PDF_CONTENT_RATIO = 0.55;
@@ -212,7 +211,7 @@ const getNonWhiteBounds = (context: CanvasRenderingContext2D, width: number, hei
   };
 };
 
-const createFaxJpegFromCanvas = (
+const createFaxPngFromCanvas = (
   sourceCanvas: HTMLCanvasElement,
   sourceContext: CanvasRenderingContext2D,
 ) => {
@@ -234,7 +233,7 @@ const createFaxJpegFromCanvas = (
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
   context.drawImage(sourceCanvas, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, width, height);
-  return canvas.toDataURL("image/jpeg", FAX_IMAGE_QUALITY);
+  return canvas.toDataURL("image/png");
 };
 
 const createPdfDocumentFromOriginalFile = async (file: File) => {
@@ -268,9 +267,9 @@ const prepareImageForFax = async (file: File) => {
   context.drawImage(image, 0, 0, width, height);
 
   return {
-    filename: replaceFileExtension(file.name, ".jpg"),
-    type: "image/jpeg",
-    content: canvas.toDataURL("image/jpeg", FAX_IMAGE_QUALITY),
+    filename: replaceFileExtension(file.name, ".png"),
+    type: "image/png",
+    content: canvas.toDataURL("image/png"),
   };
 };
 
@@ -287,7 +286,7 @@ const preparePdfForFax = async (file: File) => {
   const pdf = await loadingTask.promise;
   const documents: Omit<UploadedDocument, "url">[] = [];
   const baseFilename = file.name.replace(/\.[^./\\]+$/, "");
-  let shouldConvertToJpeg = false;
+  let shouldConvertToImage = false;
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
@@ -314,17 +313,17 @@ const preparePdfForFax = async (file: File) => {
       return createPdfDocumentFromOriginalFile(file);
     }
 
-    shouldConvertToJpeg = true;
+    shouldConvertToImage = true;
 
     documents.push({
-      filename: `${baseFilename}-page-${pageNumber}.jpg`,
-      type: "image/jpeg",
-      content: createFaxJpegFromCanvas(canvas, context),
+      filename: `${baseFilename}-page-${pageNumber}.png`,
+      type: "image/png",
+      content: createFaxPngFromCanvas(canvas, context),
     });
   }
 
   await pdf.destroy();
-  return shouldConvertToJpeg ? documents : createPdfDocumentFromOriginalFile(file);
+  return shouldConvertToImage ? documents : createPdfDocumentFromOriginalFile(file);
 };
 
 const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
