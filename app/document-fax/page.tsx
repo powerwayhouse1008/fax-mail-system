@@ -51,6 +51,7 @@ const translations = {
     sendSuccess: "Documents were sent to the Fax API for",
     sendFailed: "Fax sending failed",
     recipientsUnit: "fax number(s)",
+    removeDocument: "Remove",
   },
   ja: {
     title: "FAX \u8cc7\u6599",
@@ -73,6 +74,7 @@ const translations = {
     sendSuccess: "\u8cc7\u6599\u3092Fax API\u306b\u9001\u4fe1\u3057\u307e\u3057\u305f:",
     sendFailed: "FAX\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f",
     recipientsUnit: "\u4ef6",
+    removeDocument: "\u524a\u9664",
   },
   vi: {
     title: "Fax t\u00e0i li\u1ec7u",
@@ -95,6 +97,7 @@ const translations = {
     sendSuccess: "\u0110\u00e3 g\u1eedi t\u00e0i li\u1ec7u t\u1edbi Fax API cho",
     sendFailed: "G\u1eedi fax th\u1ea5t b\u1ea1i",
     recipientsUnit: "s\u1ed1 fax",
+    removeDocument: "Xoa",
   },
   zh: {
     title: "文档传真",
@@ -396,6 +399,7 @@ export default function DocumentFaxPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const t = translations[locale];
+  const removeDocumentLabel = "removeDocument" in t ? t.removeDocument : "Remove";
   const faxNumbers = useMemo(() => cleanFaxNumbers(faxListInput), [faxListInput]);
   const resolvedSubject = subject.trim() || t.defaultSubject;
 
@@ -414,7 +418,6 @@ export default function DocumentFaxPage() {
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
-    setDocuments([]);
     setMessage(null);
 
     if (files.length === 0) return;
@@ -422,7 +425,8 @@ export default function DocumentFaxPage() {
     setIsUploading(true);
     try {
       const uploadedDocumentGroups = await Promise.all(files.map(prepareFileForFax));
-      setDocuments(uploadedDocumentGroups.flat());
+      setDocuments((currentDocuments) => [...currentDocuments, ...uploadedDocumentGroups.flat()]);
+      event.target.value = "";
     } catch (error) {
       setMessage({
         type: "error",
@@ -431,6 +435,10 @@ export default function DocumentFaxPage() {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const removeDocument = (indexToRemove: number) => {
+    setDocuments((currentDocuments) => currentDocuments.filter((_, index) => index !== indexToRemove));
   };
 
   const handleSend = async () => {
@@ -548,8 +556,20 @@ export default function DocumentFaxPage() {
                 <div className="document-preview-list">
                   {documents.map((document, index) => (
                     <div className="document-preview" key={`${document.filename}-${index}`}>
-                      <strong>{document.filename}</strong>
-                      <small>{document.type || "application/octet-stream"}</small>
+                      <div className="document-preview-header">
+                        <div>
+                          <strong>{document.filename}</strong>
+                          <small>{document.type || "application/octet-stream"}</small>
+                        </div>
+                        <button
+                          type="button"
+                          className="document-remove-btn"
+                          onClick={() => removeDocument(index)}
+                          disabled={isSending}
+                        >
+                          {removeDocumentLabel}
+                        </button>
+                      </div>
                       {isImageDocument(document) ? (
                         <img src={document.url} alt={document.filename} />
                       ) : isPdfDocument(document) ? (
