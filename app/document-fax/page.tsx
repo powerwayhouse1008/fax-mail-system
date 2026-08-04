@@ -35,7 +35,8 @@ const FAX_PDF_RENDER_MAX_HEIGHT = 3508;
 const WHITE_PIXEL_THRESHOLD = 248;
 const PDF_CROP_MARGIN = 32;
 const SMALL_PDF_CONTENT_RATIO = 0.55;
-const DIRECT_SEND_PAYLOAD_LIMIT_CHARS = 3_500_000;
+const DIRECT_SEND_PAYLOAD_LIMIT_CHARS = 8_000_000;
+const FAX_JPEG_QUALITY = 0.92;
 
 const translations = {
   en: {
@@ -186,6 +187,9 @@ const isPdfFile = (file: File) => getFileMimeType(file) === "application/pdf" ||
 
 const replaceFileExtension = (filename: string, extension: string) =>
   filename.replace(/\.[^./\\]+$/, "") + extension;
+
+const isMobileBrowser = () =>
+  typeof window !== "undefined" && /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
 
 const toSafeUploadFilename = (filename: string, fallbackExtension = ".bin") => {
   const extensionMatch = filename.match(/\.[a-z0-9]{1,8}$/i);
@@ -357,9 +361,9 @@ const prepareImageForFax = async (file: File) => {
   context.drawImage(image, 0, 0, width, height);
 
   return {
-    filename: replaceFileExtension(file.name, ".png"),
-    type: "image/png",
-    content: canvas.toDataURL("image/png"),
+    filename: replaceFileExtension(file.name, ".jpg"),
+    type: "image/jpeg",
+    content: canvas.toDataURL("image/jpeg", FAX_JPEG_QUALITY),
   };
 };
 
@@ -461,6 +465,10 @@ const prepareAttachmentsForSend = async (documents: UploadedDocument[]) => {
     return documents.map(createDirectFaxAttachment);
   }
 
+  if (isMobileBrowser()) {
+    throw new Error("File is too large to send from this phone. Please reduce the image size or send fewer files at once.");
+  }
+
   return Promise.all(documents.map(createUploadedFaxAttachment));
 };
 
@@ -497,7 +505,7 @@ const createShortJapaneseError = (value: unknown) => {
   }
 
   if (/string did not match the expected pattern/i.test(raw)) {
-    return "File upload failed on this browser. Please try Safari/Chrome directly and avoid very large files.";
+    return "File is too large for mobile upload. Please send fewer files at once or use a smaller image.";
   }
 
   if (/\u6709\u52b9\u306aFAX|fax/i.test(raw) && /\u756a\u53f7|number/i.test(raw)) {
