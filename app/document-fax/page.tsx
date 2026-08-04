@@ -12,6 +12,11 @@ type UploadedDocument = {
   filename: string;
   type: string;
   url: string;
+};
+
+type PreparedDocument = {
+  filename: string;
+  type: string;
   content: string;
 };
 
@@ -169,6 +174,35 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType: string) => {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || fallbackType || "application/octet-stream" });
+};
+
+const uploadDocumentFile = async (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("channel", "fax");
+  formData.append("scope", "document-fax");
+  formData.append("category", "documents");
+
+  const response = await fetch("/api/storage/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = (await response.json()) as { url?: string; error?: string };
+  if (!response.ok) {
+    throw new Error(data.error || "File upload failed");
+  }
+  if (!data.url) {
+    throw new Error("File upload failed");
+  }
+
+  return data.url;
+};
+
 const loadImage = (src: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
@@ -287,7 +321,7 @@ const preparePdfForFax = async (file: File) => {
     useSystemFonts: true,
   });
   const pdf = await loadingTask.promise;
-  const documents: Omit<UploadedDocument, "url">[] = [];
+  const documents: PreparedDocument[] = [];
   const baseFilename = file.name.replace(/\.[^./\\]+$/, "");
   let shouldConvertToImage = false;
 
@@ -342,10 +376,17 @@ const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
             },
       ];
 
-  return preparedDocuments.map((document) => ({
-    ...document,
-    url: document.content,
-  }));
+  return Promise.all(
+    preparedDocuments.map(async (document) => {
+      const preparedFile = await dataUrlToFile(document.content, document.filename, document.type);
+      const url = await uploadDocumentFile(preparedFile);
+      return {
+        filename: document.filename,
+        type: document.type,
+        url,
+      };
+    }),
+  );
 };
 
 const readSendResponse = async (response: Response): Promise<SendResponse> => {
@@ -467,7 +508,6 @@ export default function DocumentFaxPage() {
           text: resolvedSubject,
           attachments: documents.map((document) => ({
               filename: document.filename,
-              content: document.content,
               url: document.url,
               type: isPdfDocument(document) ? "application/pdf" : document.type,
           })),
