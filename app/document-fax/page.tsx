@@ -12,6 +12,7 @@ type UploadedDocument = {
   filename: string;
   type: string;
   url: string;
+  content: string;
 };
 
 type PreparedDocument = {
@@ -34,6 +35,7 @@ const FAX_PDF_RENDER_MAX_HEIGHT = 3508;
 const WHITE_PIXEL_THRESHOLD = 248;
 const PDF_CROP_MARGIN = 32;
 const SMALL_PDF_CONTENT_RATIO = 0.55;
+const DIRECT_SEND_PAYLOAD_LIMIT_CHARS = 3_500_000;
 
 const translations = {
   en: {
@@ -427,21 +429,39 @@ const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
             },
       ];
 
-  return Promise.all(
-    preparedDocuments.map(async (document) => {
-      const preparedBlob = dataUrlToBlob(document.content, document.filename, document.type);
-      const uploadFilename = toSafeUploadFilename(
-        document.filename,
-        document.type === "application/pdf" ? ".pdf" : ".bin",
-      );
-      const url = await uploadDocumentBlob(preparedBlob, uploadFilename);
-      return {
-        filename: uploadFilename,
-        type: document.type,
-        url,
-      };
-    }),
+  return preparedDocuments.map((document) => ({
+    ...document,
+    url: document.content,
+  }));
+};
+
+const createDirectFaxAttachment = (document: UploadedDocument) => ({
+  filename: toSafeUploadFilename(document.filename, document.type === "application/pdf" ? ".pdf" : ".bin"),
+  content: document.content,
+  type: isPdfDocument(document) ? "application/pdf" : normalizeMimeType(document.type),
+});
+
+const createUploadedFaxAttachment = async (document: UploadedDocument) => {
+  const uploadFilename = toSafeUploadFilename(
+    document.filename,
+    document.type === "application/pdf" ? ".pdf" : ".bin",
   );
+  const preparedBlob = dataUrlToBlob(document.content, document.filename, document.type);
+  const url = await uploadDocumentBlob(preparedBlob, uploadFilename);
+  return {
+    filename: uploadFilename,
+    url,
+    type: isPdfDocument(document) ? "application/pdf" : normalizeMimeType(document.type),
+  };
+};
+
+const prepareAttachmentsForSend = async (documents: UploadedDocument[]) => {
+  const directPayloadSize = documents.reduce((total, document) => total + document.content.length, 0);
+  if (directPayloadSize <= DIRECT_SEND_PAYLOAD_LIMIT_CHARS) {
+    return documents.map(createDirectFaxAttachment);
+  }
+
+  return Promise.all(documents.map(createUploadedFaxAttachment));
 };
 
 const readSendResponse = async (response: Response): Promise<SendResponse> => {
@@ -474,6 +494,10 @@ const createShortJapaneseError = (value: unknown) => {
 
   if (/401|403|unauthorized|forbidden|authentication|authorization/i.test(raw)) {
     return "FAX API\u306e\u8a8d\u8a3c\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
+  }
+
+  if (/string did not match the expected pattern/i.test(raw)) {
+    return "File upload failed on this browser. Please try Safari/Chrome directly and avoid very large files.";
   }
 
   if (/\u6709\u52b9\u306aFAX|fax/i.test(raw) && /\u756a\u53f7|number/i.test(raw)) {
@@ -552,6 +576,7 @@ export default function DocumentFaxPage() {
     setMessage(null);
 
     try {
+      const attachments = await prepareAttachmentsForSend(documents);
       const response = await fetch("/api/fax/send", {
         method: "POST",
         headers: {
@@ -561,11 +586,7 @@ export default function DocumentFaxPage() {
           faxNumbers,
           subject: resolvedSubject,
           text: resolvedSubject,
-          attachments: documents.map((document) => ({
-              filename: document.filename,
-              url: document.url,
-              type: isPdfDocument(document) ? "application/pdf" : document.type,
-          })),
+          attachments,
           paper_size: "A4",
           fax_quality: 1,
           mapping_columns: JSON.stringify({ fax: 0 }),
