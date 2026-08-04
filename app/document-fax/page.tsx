@@ -36,7 +36,7 @@ const WHITE_PIXEL_THRESHOLD = 248;
 const PDF_CROP_MARGIN = 32;
 const SMALL_PDF_CONTENT_RATIO = 0.55;
 const DIRECT_SEND_PAYLOAD_LIMIT_CHARS = 8_000_000;
-const FAX_JPEG_QUALITY = 0.92;
+const FAX_JPEG_QUALITY = 0.98;
 
 const translations = {
   en: {
@@ -142,6 +142,13 @@ const mobileUploadPatternMessages: Record<Locale, string> = {
   ja: "\u30b9\u30de\u30db\u3067\u306f\u753b\u50cf\u306e\u679a\u6570\u307e\u305f\u306f\u5bb9\u91cf\u304c\u5927\u304d\u3059\u304e\u307e\u3059\u3002\u3044\u304f\u3064\u304b\u524a\u9664\u3057\u3066\u3001\u5c11\u306a\u3044\u679a\u6570\u3067\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
   vi: "So anh hoac dung luong qua lon doi voi dien thoai nay. Vui long xoa bot file va gui it anh hon moi lan.",
   zh: "\u8fd9\u90e8\u624b\u673a\u4e0a\u56fe\u7247\u6570\u91cf\u6216\u5bb9\u91cf\u592a\u5927\u3002\u8bf7\u5220\u9664\u4e00\u4e9b\u6587\u4ef6\uff0c\u6bcf\u6b21\u5c11\u53d1\u51e0\u5f20\u3002",
+};
+
+const mobileQualityNoticeMessages: Record<Locale, string> = {
+  en: "On mobile, send one file at a time to keep fax quality high. Avoid sending many files together.",
+  ja: "\u30b9\u30de\u30db\u304b\u3089\u9001\u4fe1\u3059\u308b\u5834\u5408\u306f\u3001FAX\u306e\u753b\u8cea\u3092\u4fdd\u3064\u305f\u3081\u306b1\u30d5\u30a1\u30a4\u30eb\u305a\u3064\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u8907\u6570\u30d5\u30a1\u30a4\u30eb\u3092\u4e00\u5ea6\u306b\u9001\u4fe1\u3057\u306a\u3044\u3067\u304f\u3060\u3055\u3044\u3002",
+  vi: "Khi gui bang dien thoai, hay gui tung file mot de dam bao chat luong fax. Khong nen gui nhieu file cung luc.",
+  zh: "\u4f7f\u7528\u624b\u673a\u53d1\u9001\u65f6\uff0c\u4e3a\u4e86\u4fdd\u8bc1\u4f20\u771f\u8d28\u91cf\uff0c\u8bf7\u6bcf\u6b21\u53ea\u53d1\u9001\u4e00\u4e2a\u6587\u4ef6\u3002\u4e0d\u5efa\u8bae\u4e00\u6b21\u53d1\u9001\u591a\u4e2a\u6587\u4ef6\u3002",
 };
 
 const detectLocale = (): Locale => {
@@ -538,6 +545,7 @@ export default function DocumentFaxPage() {
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const t = translations[locale];
@@ -547,6 +555,7 @@ export default function DocumentFaxPage() {
 
   useEffect(() => {
     setLocale(detectLocale());
+    setIsMobileDevice(isMobileBrowser());
     const handleLocaleChange = (event: Event) => {
       const nextLocale = (event as CustomEvent<{ locale?: Locale }>).detail?.locale;
       if (nextLocale && translations[nextLocale]) setLocale(nextLocale);
@@ -689,6 +698,8 @@ export default function DocumentFaxPage() {
                   disabled={isUploading || isSending}
                 />
               </label>
+
+              {isMobileDevice ? <p className="document-mobile-notice">{mobileQualityNoticeMessages[locale]}</p> : null}
 
               {documents.length > 0 ? (
                 <div className="document-preview-list">
