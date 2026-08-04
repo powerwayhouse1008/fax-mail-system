@@ -133,21 +133,21 @@ const translations = {
 const mobilePayloadTooLargeMessages: Record<Locale, string> = {
   en: "Too many images to send from this phone at once. Please delete some files and send fewer images each time.",
   ja: "\u30b9\u30de\u30db\u304b\u3089\u4e00\u5ea6\u306b\u9001\u4fe1\u3059\u308b\u753b\u50cf\u304c\u591a\u3059\u304e\u307e\u3059\u3002\u3044\u304f\u3064\u304b\u524a\u9664\u3057\u3066\u3001\u5c11\u306a\u3044\u679a\u6570\u3067\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
-  vi: "Qua nhieu anh de gui cung luc tu dien thoai. Vui long xoa bot file va gui it anh hon moi lan.",
+  vi: "Quá nhiều ảnh để gửi cùng lúc từ điện thoại. Vui lòng xóa một số tệp và gửi ít ảnh hơn mỗi lần.",
   zh: "\u624b\u673a\u4e00\u6b21\u53d1\u9001\u7684\u56fe\u7247\u592a\u591a\u3002\u8bf7\u5220\u9664\u4e00\u4e9b\u6587\u4ef6\uff0c\u6bcf\u6b21\u5c11\u53d1\u51e0\u5f20\u3002",
 };
 
 const mobileUploadPatternMessages: Record<Locale, string> = {
   en: "Too many or too large images for this phone. Please delete some files and send fewer images each time.",
   ja: "\u30b9\u30de\u30db\u3067\u306f\u753b\u50cf\u306e\u679a\u6570\u307e\u305f\u306f\u5bb9\u91cf\u304c\u5927\u304d\u3059\u304e\u307e\u3059\u3002\u3044\u304f\u3064\u304b\u524a\u9664\u3057\u3066\u3001\u5c11\u306a\u3044\u679a\u6570\u3067\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
-  vi: "So anh hoac dung luong qua lon doi voi dien thoai nay. Vui long xoa bot file va gui it anh hon moi lan.",
+  vi: "Số ảnh hoặc dung lượng quá lớn đối với điện thoại này. Vui lòng xóa một số tệp và gửi ít ảnh hơn mỗi lần.",
   zh: "\u8fd9\u90e8\u624b\u673a\u4e0a\u56fe\u7247\u6570\u91cf\u6216\u5bb9\u91cf\u592a\u5927\u3002\u8bf7\u5220\u9664\u4e00\u4e9b\u6587\u4ef6\uff0c\u6bcf\u6b21\u5c11\u53d1\u51e0\u5f20\u3002",
 };
 
 const mobileQualityNoticeMessages: Record<Locale, string> = {
   en: "On mobile, send one file at a time to keep fax quality high. Avoid sending many files together.",
   ja: "\u30b9\u30de\u30db\u304b\u3089\u9001\u4fe1\u3059\u308b\u5834\u5408\u306f\u3001FAX\u306e\u753b\u8cea\u3092\u4fdd\u3064\u305f\u3081\u306b1\u30d5\u30a1\u30a4\u30eb\u305a\u3064\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u8907\u6570\u30d5\u30a1\u30a4\u30eb\u3092\u4e00\u5ea6\u306b\u9001\u4fe1\u3057\u306a\u3044\u3067\u304f\u3060\u3055\u3044\u3002",
-  vi: "Khi gui bang dien thoai, hay gui tung file mot de dam bao chat luong fax. Khong nen gui nhieu file cung luc.",
+  vi: "Khi gửi bằng điện thoại, hay gửi từng file một để đảm bảo chất lượng fax. Không nên gửi nhiều file cùng lúc.",
   zh: "\u4f7f\u7528\u624b\u673a\u53d1\u9001\u65f6\uff0c\u4e3a\u4e86\u4fdd\u8bc1\u4f20\u771f\u8d28\u91cf\uff0c\u8bf7\u6bcf\u6b21\u53ea\u53d1\u9001\u4e00\u4e2a\u6587\u4ef6\u3002\u4e0d\u5efa\u8bae\u4e00\u6b21\u53d1\u9001\u591a\u4e2a\u6587\u4ef6\u3002",
 };
 
