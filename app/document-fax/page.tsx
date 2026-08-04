@@ -185,6 +185,21 @@ const isPdfFile = (file: File) => getFileMimeType(file) === "application/pdf" ||
 const replaceFileExtension = (filename: string, extension: string) =>
   filename.replace(/\.[^./\\]+$/, "") + extension;
 
+const toSafeUploadFilename = (filename: string, fallbackExtension = ".bin") => {
+  const extensionMatch = filename.match(/\.[a-z0-9]{1,8}$/i);
+  const extension = extensionMatch?.[0]?.toLowerCase() ?? fallbackExtension;
+  const baseName = filename
+    .replace(/\.[^./\\]+$/, "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
+    .slice(0, 70);
+
+  return `${baseName || "fax-document"}${extension}`;
+};
+
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -199,16 +214,26 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType: string) => {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  const mimeType = normalizeMimeType(blob.type, normalizeMimeType(fallbackType, inferMimeTypeFromFilename(filename)));
-  return new File([blob], filename, { type: mimeType });
+const dataUrlToBlob = (dataUrl: string, filename: string, fallbackType: string) => {
+  const separatorIndex = dataUrl.indexOf(",");
+  if (separatorIndex < 0) throw new Error("File could not be prepared for upload.");
+
+  const header = dataUrl.slice(0, separatorIndex);
+  const payload = dataUrl.slice(separatorIndex + 1);
+  const headerMimeType = header.match(/^data:([^;,]+)/i)?.[1] ?? "";
+  const mimeType = normalizeMimeType(headerMimeType, normalizeMimeType(fallbackType, inferMimeTypeFromFilename(filename)));
+  const binaryString = header.includes(";base64") ? window.atob(payload) : decodeURIComponent(payload);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let index = 0; index < binaryString.length; index += 1) {
+    bytes[index] = binaryString.charCodeAt(index);
+  }
+
+  return new Blob([bytes], { type: mimeType });
 };
 
-const uploadDocumentFile = async (file: File) => {
+const uploadDocumentBlob = async (blob: Blob, filename: string) => {
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", blob, filename);
   formData.append("channel", "fax");
   formData.append("scope", "document-fax");
   formData.append("category", "documents");
@@ -404,10 +429,14 @@ const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
 
   return Promise.all(
     preparedDocuments.map(async (document) => {
-      const preparedFile = await dataUrlToFile(document.content, document.filename, document.type);
-      const url = await uploadDocumentFile(preparedFile);
+      const preparedBlob = dataUrlToBlob(document.content, document.filename, document.type);
+      const uploadFilename = toSafeUploadFilename(
+        document.filename,
+        document.type === "application/pdf" ? ".pdf" : ".bin",
+      );
+      const url = await uploadDocumentBlob(preparedBlob, uploadFilename);
       return {
-        filename: document.filename,
+        filename: uploadFilename,
         type: document.type,
         url,
       };
