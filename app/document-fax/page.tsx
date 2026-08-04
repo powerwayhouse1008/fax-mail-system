@@ -152,10 +152,35 @@ const isImageDocument = (document: UploadedDocument) =>
 const isPdfDocument = (document: UploadedDocument) =>
   document.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(document.filename);
 
-const isRasterImageFile = (file: File) =>
-  file.type.startsWith("image/") || /\.(png|jpe?g|jfif)$/i.test(file.name);
+const isValidMimeType = (value: string) => /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(value);
 
-const isPdfFile = (file: File) => file.type.toLowerCase() === "application/pdf" || /\.pdf$/i.test(file.name);
+const normalizeMimeType = (value: string, fallback = "application/octet-stream") => {
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return fallback;
+  if (trimmed === "image/jpg" || trimmed === "image/pjpeg" || trimmed === "image/jfif") return "image/jpeg";
+  return isValidMimeType(trimmed) ? trimmed : fallback;
+};
+
+const inferMimeTypeFromFilename = (filename: string, fallback = "application/octet-stream") => {
+  if (/\.pdf$/i.test(filename)) return "application/pdf";
+  if (/\.(jpe?g|jfif)$/i.test(filename)) return "image/jpeg";
+  if (/\.png$/i.test(filename)) return "image/png";
+  if (/\.gif$/i.test(filename)) return "image/gif";
+  if (/\.bmp$/i.test(filename)) return "image/bmp";
+  if (/\.webp$/i.test(filename)) return "image/webp";
+  if (/\.csv$/i.test(filename)) return "text/csv";
+  if (/\.json$/i.test(filename)) return "application/json";
+  if (/\.(txt|md)$/i.test(filename)) return "text/plain";
+  return fallback;
+};
+
+const getFileMimeType = (file: File) =>
+  normalizeMimeType(file.type, inferMimeTypeFromFilename(file.name));
+
+const isRasterImageFile = (file: File) =>
+  getFileMimeType(file).startsWith("image/") || /\.(png|jpe?g|jfif)$/i.test(file.name);
+
+const isPdfFile = (file: File) => getFileMimeType(file) === "application/pdf" || /\.pdf$/i.test(file.name);
 
 const replaceFileExtension = (filename: string, extension: string) =>
   filename.replace(/\.[^./\\]+$/, "") + extension;
@@ -177,7 +202,8 @@ const readFileAsDataUrl = (file: File) =>
 const dataUrlToFile = async (dataUrl: string, filename: string, fallbackType: string) => {
   const response = await fetch(dataUrl);
   const blob = await response.blob();
-  return new File([blob], filename, { type: blob.type || fallbackType || "application/octet-stream" });
+  const mimeType = normalizeMimeType(blob.type, normalizeMimeType(fallbackType, inferMimeTypeFromFilename(filename)));
+  return new File([blob], filename, { type: mimeType });
 };
 
 const uploadDocumentFile = async (file: File) => {
@@ -371,7 +397,7 @@ const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
           ? await prepareImageForFax(file)
           : {
               filename: file.name,
-              type: file.type || "application/octet-stream",
+              type: getFileMimeType(file),
               content: await readFileAsDataUrl(file),
             },
       ];
