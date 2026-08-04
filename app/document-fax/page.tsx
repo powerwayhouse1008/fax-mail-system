@@ -130,6 +130,20 @@ const translations = {
   },
 } as const;
 
+const mobilePayloadTooLargeMessages: Record<Locale, string> = {
+  en: "Too many images to send from this phone at once. Please delete some files and send fewer images each time.",
+  ja: "\u30b9\u30de\u30db\u304b\u3089\u4e00\u5ea6\u306b\u9001\u4fe1\u3059\u308b\u753b\u50cf\u304c\u591a\u3059\u304e\u307e\u3059\u3002\u3044\u304f\u3064\u304b\u524a\u9664\u3057\u3066\u3001\u5c11\u306a\u3044\u679a\u6570\u3067\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+  vi: "Qua nhieu anh de gui cung luc tu dien thoai. Vui long xoa bot file va gui it anh hon moi lan.",
+  zh: "\u624b\u673a\u4e00\u6b21\u53d1\u9001\u7684\u56fe\u7247\u592a\u591a\u3002\u8bf7\u5220\u9664\u4e00\u4e9b\u6587\u4ef6\uff0c\u6bcf\u6b21\u5c11\u53d1\u51e0\u5f20\u3002",
+};
+
+const mobileUploadPatternMessages: Record<Locale, string> = {
+  en: "Too many or too large images for this phone. Please delete some files and send fewer images each time.",
+  ja: "\u30b9\u30de\u30db\u3067\u306f\u753b\u50cf\u306e\u679a\u6570\u307e\u305f\u306f\u5bb9\u91cf\u304c\u5927\u304d\u3059\u304e\u307e\u3059\u3002\u3044\u304f\u3064\u304b\u524a\u9664\u3057\u3066\u3001\u5c11\u306a\u3044\u679a\u6570\u3067\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002",
+  vi: "So anh hoac dung luong qua lon doi voi dien thoai nay. Vui long xoa bot file va gui it anh hon moi lan.",
+  zh: "\u8fd9\u90e8\u624b\u673a\u4e0a\u56fe\u7247\u6570\u91cf\u6216\u5bb9\u91cf\u592a\u5927\u3002\u8bf7\u5220\u9664\u4e00\u4e9b\u6587\u4ef6\uff0c\u6bcf\u6b21\u5c11\u53d1\u51e0\u5f20\u3002",
+};
+
 const detectLocale = (): Locale => {
   if (typeof window === "undefined") return "ja";
   const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
@@ -459,14 +473,14 @@ const createUploadedFaxAttachment = async (document: UploadedDocument) => {
   };
 };
 
-const prepareAttachmentsForSend = async (documents: UploadedDocument[]) => {
+const prepareAttachmentsForSend = async (documents: UploadedDocument[], mobilePayloadTooLargeMessage: string) => {
   const directPayloadSize = documents.reduce((total, document) => total + document.content.length, 0);
   if (directPayloadSize <= DIRECT_SEND_PAYLOAD_LIMIT_CHARS) {
     return documents.map(createDirectFaxAttachment);
   }
 
   if (isMobileBrowser()) {
-    throw new Error("File is too large to send from this phone. Please reduce the image size or send fewer files at once.");
+    throw new Error(mobilePayloadTooLargeMessage);
   }
 
   return Promise.all(documents.map(createUploadedFaxAttachment));
@@ -483,7 +497,7 @@ const readSendResponse = async (response: Response): Promise<SendResponse> => {
   }
 };
 
-const createShortJapaneseError = (value: unknown) => {
+const createShortJapaneseError = (value: unknown, locale: Locale = "ja") => {
   const raw = typeof value === "string" ? value : value instanceof Error ? value.message : "";
   if (!raw.trim()) return "\u9001\u4fe1\u306b\u5931\u6557\u3057\u307e\u3057\u305f\u3002";
   const normalizedRaw = raw.trim();
@@ -505,7 +519,7 @@ const createShortJapaneseError = (value: unknown) => {
   }
 
   if (/string did not match the expected pattern/i.test(raw)) {
-    return "File is too large for mobile upload. Please send fewer files at once or use a smaller image.";
+    return mobileUploadPatternMessages[locale];
   }
 
   if (/\u6709\u52b9\u306aFAX|fax/i.test(raw) && /\u756a\u53f7|number/i.test(raw)) {
@@ -558,7 +572,7 @@ export default function DocumentFaxPage() {
     } catch (error) {
       setMessage({
         type: "error",
-        text: createShortJapaneseError(error),
+        text: createShortJapaneseError(error, locale),
       });
     } finally {
       setIsUploading(false);
@@ -584,7 +598,7 @@ export default function DocumentFaxPage() {
     setMessage(null);
 
     try {
-      const attachments = await prepareAttachmentsForSend(documents);
+      const attachments = await prepareAttachmentsForSend(documents, mobilePayloadTooLargeMessages[locale]);
       const response = await fetch("/api/fax/send", {
         method: "POST",
         headers: {
@@ -620,7 +634,7 @@ export default function DocumentFaxPage() {
         const firstDetail = failed.find((item) => item.error)?.error;
         setMessage({
           type: "error",
-          text: createShortJapaneseError(payload.error || firstDetail || t.sendPartial),
+          text: createShortJapaneseError(payload.error || firstDetail || t.sendPartial, locale),
         });
         return;
       }
@@ -632,7 +646,7 @@ export default function DocumentFaxPage() {
     } catch (error) {
       setMessage({
         type: "error",
-        text: createShortJapaneseError(error),
+        text: createShortJapaneseError(error, locale),
       });
     } finally {
       setIsSending(false);
