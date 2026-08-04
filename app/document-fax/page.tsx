@@ -147,7 +147,7 @@ const mobileUploadPatternMessages: Record<Locale, string> = {
 const mobileQualityNoticeMessages: Record<Locale, string> = {
   en: "On mobile, send one file at a time to keep fax quality high. Avoid sending many files together.",
   ja: "\u30b9\u30de\u30db\u304b\u3089\u9001\u4fe1\u3059\u308b\u5834\u5408\u306f\u3001FAX\u306e\u753b\u8cea\u3092\u4fdd\u3064\u305f\u3081\u306b1\u30d5\u30a1\u30a4\u30eb\u305a\u3064\u9001\u4fe1\u3057\u3066\u304f\u3060\u3055\u3044\u3002\u8907\u6570\u30d5\u30a1\u30a4\u30eb\u3092\u4e00\u5ea6\u306b\u9001\u4fe1\u3057\u306a\u3044\u3067\u304f\u3060\u3055\u3044\u3002",
-  vi: "Khi gửi bằng điện thoại, hay gửi từng file một để đảm bảo chất lượng fax. Không nên gửi nhiều file cùng lúc.",
+  vi: "Khi gửi bằng điện thoại, hãy gửi từng file một để đảm bảo chất lượng fax. Không nên gửi nhiều file cùng lúc.",
   zh: "\u4f7f\u7528\u624b\u673a\u53d1\u9001\u65f6\uff0c\u4e3a\u4e86\u4fdd\u8bc1\u4f20\u771f\u8d28\u91cf\uff0c\u8bf7\u6bcf\u6b21\u53ea\u53d1\u9001\u4e00\u4e2a\u6587\u4ef6\u3002\u4e0d\u5efa\u8bae\u4e00\u6b21\u53d1\u9001\u591a\u4e2a\u6587\u4ef6\u3002",
 };
 
