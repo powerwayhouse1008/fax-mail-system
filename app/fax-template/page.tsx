@@ -140,7 +140,7 @@ const faxTemplateContent: FaxTemplateContent = {
   request: "さて、下記物件の内見申込をさせて頂きますので、宜しくお願いします。",
   messageBody: "何卒よろしくお願いいたします。",
   signature:
-    "株式会社パワーウェイ\n〒101-0041 東京都千代田区神田須田町2-23-1 老崎ビル4F\nTEL: 03-5207-2378 FAX: 03-5207-2768\nEmail: mai@powerway.jp",
+    "株式会社パワーウェイ\n〒101-0041 東京都千代田区神田須田町2-23-1 老崎ビル4F\nTEL: 03-5207-2378 FAX: 03-5207-2768",
   contact: "090-6659-1306",
   propertyName: "杉並ハイツ 101",
   preferredDate: "2025/12/02",
