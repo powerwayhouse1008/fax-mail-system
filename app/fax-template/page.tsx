@@ -53,6 +53,10 @@ type SessionResponse = {
   };
 };
 const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|gif|bmp|webp|svg|heic|heif)$/i;
+const OLD_DEFAULT_EMAIL = "mai@powerway.jp";
+const NEW_DEFAULT_EMAIL = "nifo@powerway.house";
+
+const replaceDefaultEmail = (value: string) => value.replaceAll(OLD_DEFAULT_EMAIL, NEW_DEFAULT_EMAIL);
 
 const isLikelyImageAttachment = (fileName: string, mimeType: string) => {
   if (mimeType.startsWith("image/")) {
@@ -140,7 +144,7 @@ const faxTemplateContent: FaxTemplateContent = {
   request: "さて、下記物件の内見申込をさせて頂きますので、宜しくお願いします。",
   messageBody: "何卒よろしくお願いいたします。",
   signature:
-    "株式会社パワーウェイ\n〒101-0041 東京都千代田区神田須田町2-23-1 老崎ビル4F\nTEL: 03-5207-2378 FAX: 03-5207-2768",
+    "株式会社パワーウェイ\n〒101-0041 東京都千代田区神田須田町2-23-1 老崎ビル4F\nTEL: 03-5207-2378 FAX: 03-5207-2768\nEmail: nifo@powerway.house",
   contact: "090-6659-1306",
   propertyName: "杉並ハイツ 101",
   preferredDate: "2025/12/02",
@@ -264,10 +268,14 @@ export default function FaxTemplatePage({ searchParams }: FaxTemplatePageProps) 
       try {
         const parsed = JSON.parse(savedDraft) as SavedDraft;
         if (parsed.content) {
-          setContent((prev) => ({ ...prev, ...parsed.content }));
+          setContent((prev) => ({
+            ...prev,
+            ...parsed.content,
+            signature: parsed.content?.signature ? replaceDefaultEmail(parsed.content.signature) : prev.signature,
+          }));
         }
         if (parsed.messageBodyHtml) {
-          setMessageBodyHtml(parsed.messageBodyHtml);
+          setMessageBodyHtml(replaceDefaultEmail(parsed.messageBodyHtml));
         } else if (parsed.content?.messageBody) {
           setMessageBodyHtml(parsed.content.messageBody);
         }

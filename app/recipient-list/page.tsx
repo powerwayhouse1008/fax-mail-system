@@ -56,6 +56,11 @@ const cleanList = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const OLD_DEFAULT_EMAIL = "mai@powerway.jp";
+const NEW_DEFAULT_EMAIL = "nifo@powerway.house";
+
+const replaceDefaultEmail = (value: string) => value.replaceAll(OLD_DEFAULT_EMAIL, NEW_DEFAULT_EMAIL);
+
 const isPdfAttachment = (fileName: string, mimeType: string) =>
   mimeType.toLowerCase() === "application/pdf" || /\.pdf$/i.test(fileName.trim());
 
@@ -131,10 +136,13 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
       try {
         const parsed = JSON.parse(savedDraft) as SavedDraft;
-        const draftContent = parsed.content ?? {};
+        const draftContent = {
+          ...(parsed.content ?? {}),
+          signature: parsed.content?.signature ? replaceDefaultEmail(parsed.content.signature) : parsed.content?.signature,
+        };
         setFaxDraftContent(draftContent);
         const subject = draftContent.subject?.trim();
-        const bodyFromEditor = parsed.messageBodyHtml?.trim();
+        const bodyFromEditor = parsed.messageBodyHtml ? replaceDefaultEmail(parsed.messageBodyHtml).trim() : "";
         const messageBody = draftContent.messageBody?.trim();
         const signature = draftContent.signature?.trim();
 
