@@ -47,6 +47,7 @@ export function verifySessionToken(token: string | undefined): SessionUser | nul
     const payload = JSON.parse(base64UrlDecode(encodedPayload)) as SessionPayload;
     if (payload.exp <= Math.floor(Date.now() / 1000)) return null;
 
+    if (!["technical_admin", "owner", "manager", "staff"].includes(payload.role)) return null;
     return {
       username: payload.username,
       role: payload.role,

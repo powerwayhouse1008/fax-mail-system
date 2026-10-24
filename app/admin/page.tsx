@@ -140,7 +140,7 @@ export default function AdminHomePage() {
   };
 
   return (
-    <AuthGuard requiredRole="admin">
+    <AuthGuard requiredRole="technical_admin">
       <main className="admin-shell">
         <section className="admin-card">
           <header className="admin-header">

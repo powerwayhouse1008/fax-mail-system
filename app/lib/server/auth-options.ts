@@ -82,7 +82,7 @@ export const authConfig: NextAuthConfig = {
     async session({ session, token }) {
       if (session.user) {
         const roles = Array.isArray(token.roles) ? token.roles : [];
-        const role = roles.includes("admin") ? "admin" : "user";
+        const role = roles.includes("admin") ? "technical_admin" : "owner";
         session.user.role = role;
       }
       return session;

@@ -20,8 +20,8 @@ export async function POST(request: Request) {
   }
 
   if (username === ADMIN_CREDENTIAL.username && password === ADMIN_CREDENTIAL.password) {
-    const token = createSessionToken({ username, role: "admin" });
-    const response = NextResponse.json({ username, role: "admin" as const });
+    const token = createSessionToken({ username, role: "technical_admin" });
+    const response = NextResponse.json({ username, role: "technical_admin" as const });
     response.cookies.set(AUTH_COOKIE_NAME, token, {
       httpOnly: true,
       sameSite: "lax",
@@ -38,8 +38,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "ID・パスワードを間違いました" }, { status: 401 });
   }
 
-  const token = createSessionToken({ username: matched.username, role: "user" });
-  const response = NextResponse.json({ username: matched.username, role: "user" as const });
+  const token = createSessionToken({ username: matched.username, role: matched.role });
+  const response = NextResponse.json({ username: matched.username, role: matched.role });
   response.cookies.set(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",

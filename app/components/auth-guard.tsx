@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 type AuthGuardProps = {
   children: ReactNode;
-  requiredRole?: "admin" | "user";
+  requiredRole?: "technical_admin" | "owner" | "manager" | "staff";
 };
 
 export default function AuthGuard({ children, requiredRole }: AuthGuardProps) {
@@ -26,7 +26,7 @@ export default function AuthGuard({ children, requiredRole }: AuthGuardProps) {
       }
        const payload = (await response.json()) as {
         user?: {
-          role?: "admin" | "user";
+          role?: "technical_admin" | "owner" | "manager" | "staff";
         };
       };
 

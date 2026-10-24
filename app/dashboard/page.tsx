@@ -256,7 +256,7 @@ export default function DashboardPage() {
 
   const t = translations[locale];
   const dashboardActions = useMemo(
-    () => (session?.role === "admin" ? [...t.actions, ...t.adminActions] : t.actions),
+    () => (session?.role === "technical_admin" ? [...t.actions, ...t.adminActions] : t.actions),
     [session?.role, t],
   );
 

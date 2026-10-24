@@ -1,7 +1,7 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
-import { DEFAULT_USER_ACCOUNTS, type UserAccount } from "../auth";
+import { DEFAULT_USER_ACCOUNTS, type AppRole, type UserAccount } from "../auth";
 
 type UserRow = {
   id: string | number;
@@ -12,6 +12,7 @@ type UserRow = {
   password?: string | null;
   name: string | null;
   created_at: string;
+  role?: string | null;
 };
 
 const normalizeText = (value: string) => value.trim();
@@ -20,12 +21,14 @@ let resolvedUsersTable: string | null = null;
 const LOCAL_HASH_SCHEME = "scrypt_v1";
 const LOCAL_USERS_FILE_PATH = path.join(process.cwd(), "data/users.json");
 
+const normalizeRole = (role: unknown): AppRole => role === "owner" || role === "manager" || role === "staff" ? role : "staff";
 const normalizeAccounts = (accounts: UserAccount[]) =>
   accounts.map((account) => ({
     ...account,
     username: normalizeText(account.username),
     password: normalizeText(account.password),
     name: account.name?.trim() || account.username,
+    role: normalizeRole(account.role),
   }));
 
 
@@ -145,6 +148,7 @@ function mapRowToAccount(row: UserRow): UserAccount {
     username,
     password: passwordHash,
     name: row.name || fallbackName,
+    role: normalizeRole(row.role),
     createdAt: row.created_at,
   };
 }
@@ -159,6 +163,11 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
   const normalizedPassword = normalizeText(password);
+
+  // Migrate legacy seed accounts on first successful login.
+  if (!isLocalPasswordHash(passwordHash) && !passwordHash.startsWith("$2")) {
+    return normalizedPassword === passwordHash;
+  }
 
   if (isLocalPasswordHash(passwordHash)) {
     return verifyLocalPassword(normalizedPassword, passwordHash);
@@ -255,12 +264,12 @@ async function seedDefaultUsersIfNeeded(): Promise<void> {
 }
 
 export async function readUsers(): Promise<UserAccount[]> {
-  await seedDefaultUsersIfNeeded();
  if (!hasSupabaseConfig()) {
     return readLocalUsersFile();
   }
+  await seedDefaultUsersIfNeeded();
    const data = await withUsersTable((table) =>
-    supabaseRequest<UserRow[]>(`/${table}?select=id,username,password_hash,password,name,created_at&order=created_at.asc`),
+    supabaseRequest<UserRow[]>(`/${table}?select=id,username,password_hash,password,name,role,created_at&order=created_at.asc`),
   );
 
   return normalizeAccounts((data ?? []).map((row) => mapRowToAccount(row)));
@@ -270,6 +279,7 @@ export async function createUser(input: {
   username: string;
   password: string;
   name?: string;
+  role?: AppRole;
 }): Promise<void> {
   const username = normalizeText(input.username);
   const passwordHash = await hashPassword(input.password);
@@ -281,6 +291,7 @@ export async function createUser(input: {
       username,
       password: passwordHash,
       name,
+      role: input.role ?? "staff",
       createdAt: new Date().toISOString(),
     };
     await writeLocalUsersFile([...users, nextUser]);
@@ -292,6 +303,7 @@ export async function createUser(input: {
     password: passwordHash,
     name,
     created_at: new Date().toISOString(),
+    role: input.role ?? "staff",
   };
   const variants = [
     { ...basePayload, username_unique: username, "username unique": username },
@@ -327,6 +339,7 @@ export async function updateUser(input: {
   username_unique?: string;
   password?: string;
   name?: string;
+  role?: AppRole;
 }): Promise<void> {
   if (!hasSupabaseConfig()) {
     const users = await readLocalUsersFile();
@@ -339,6 +352,7 @@ export async function updateUser(input: {
           username: input.username !== undefined ? normalizeText(input.username) : user.username,
           name: input.name !== undefined ? normalizeText(input.name) : user.name,
           password: nextPassword,
+          role: input.role ?? user.role,
         };
       }),
     );
@@ -346,7 +360,7 @@ export async function updateUser(input: {
     return;
   }
   const payload: Partial<
-    Record<"username" | "username_unique" | "username unique" | "password" | "password_hash" | "name", string>
+    Record<"username" | "username_unique" | "username unique" | "password" | "password_hash" | "name" | "role", string>
   > = {};
   let normalizedUsername: string | undefined;
   if (input.username !== undefined) {
@@ -359,6 +373,7 @@ export async function updateUser(input: {
     payload.password = passwordHash;
   }
   if (input.name !== undefined) payload.name = normalizeText(input.name);
+  if (input.role !== undefined) payload.role = input.role;
 
    const variants = normalizedUsername
     ? [

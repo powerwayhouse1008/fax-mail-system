@@ -7,7 +7,7 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-      role?: "admin" | "user";
+      role?: "technical_admin" | "owner" | "manager" | "staff";
     };
   }
 }

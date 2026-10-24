@@ -247,7 +247,7 @@ const handleDeleteAll = async () => {
   };
 
   return (
-    <AuthGuard requiredRole="admin">
+    <AuthGuard requiredRole="technical_admin">
       <main className="dashboard-shell">
         <section className="dashboard-card" style={{ display: "grid", gap: "1rem" }}>
           <div className="history-header">

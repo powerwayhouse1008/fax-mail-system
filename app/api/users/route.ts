@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE_NAME, type UserAccount } from "../../lib/auth";
+import { AUTH_COOKIE_NAME, type AppRole, type UserAccount } from "../../lib/auth";
 import { verifySessionToken } from "../../lib/server/session";
 import { createUser, deleteUser, readUsers, updateUser } from "../../lib/server/user-store";
 
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
     const session = verifySessionToken(token);
 
-      if (!session || session.role !== "admin") return unauthorized();
+      if (!session || session.role !== "technical_admin") return unauthorized();
 
     const users = await readUsers();
     const safeUsers = users.map((user) => ({
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
     const session = verifySessionToken(token);
 
-   if (!session || session.role !== "admin") return unauthorized();
+   if (!session || session.role !== "technical_admin") return unauthorized();
 
    const rawBody = await request.text();
     if (!rawBody.trim()) {
@@ -52,6 +52,8 @@ export async function POST(request: NextRequest) {
       const username = String(payload.username ?? "").trim();
       const password = String(payload.password ?? "").trim();
       const name = String(payload.name ?? username).trim();
+      const role = (payload as { role?: AppRole }).role ?? "staff";
+      if (!["owner", "manager", "staff"].includes(role)) return NextResponse.json({ message: "Invalid role" }, { status: 400 });
 
       if (!username || !password) {
         return NextResponse.json({ message: "IDとパスワードは必須です。" }, { status: 400 });
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: "IDは既に存在します。" }, { status: 409 });
       }
 
-      await createUser({ username, password, name });
+      await createUser({ username, password, name, role });
       return NextResponse.json({ ok: true });
     }
 
@@ -78,6 +80,7 @@ export async function POST(request: NextRequest) {
       let username: string | undefined;
       let password: string | undefined;
       let name: string | undefined;
+      let role: AppRole | undefined;
 
       if (payload.username !== undefined) {
         username = String(payload.username).trim();
@@ -96,9 +99,13 @@ export async function POST(request: NextRequest) {
        if (payload.name !== undefined) {
         name = String(payload.name).trim() || username || user.username;
       }
+      if ((payload as { role?: AppRole }).role !== undefined) {
+        role = (payload as { role: AppRole }).role;
+        if (!["owner", "manager", "staff"].includes(role)) return NextResponse.json({ message: "Invalid role" }, { status: 400 });
+      }
     
 
-      await updateUser({ id: targetId, username, password, name });
+      await updateUser({ id: targetId, username, password, name, role });
       return NextResponse.json({ ok: true });
     }
 

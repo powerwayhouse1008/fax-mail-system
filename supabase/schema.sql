@@ -6,8 +6,10 @@ create table if not exists public.users (
   username text not null unique,
   password_hash text not null,
   name text,
+  role text not null default 'staff' check (role in ('owner', 'manager', 'staff')),
   created_at timestamptz not null default now()
 );
+alter table public.users add column if not exists role text not null default 'staff';
 
 -- Hash password with bcrypt (bf)
 create or replace function public.hash_password(plain_password text)

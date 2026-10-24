@@ -4,7 +4,9 @@ export type UserAccount = {
   password: string;
   createdAt: string;
   name?: string;
+  role: AppRole;
 };
+export type AppRole = "technical_admin" | "owner" | "manager" | "staff";
 
 export const USER_ACCOUNTS_STORAGE_KEY = "fax_mail_user_accounts";
 export const AUTH_SESSION_STORAGE_KEY = "fax_mail_auth_session";
@@ -17,6 +19,7 @@ export const DEFAULT_USER_ACCOUNTS: UserAccount[] = [
     password: "123456",
     name: "Staff",
     createdAt: "2026-04-02T00:00:00.000Z",
+    role: "staff",
   },
 ];
 
@@ -26,5 +29,5 @@ export const ADMIN_CREDENTIAL = {
 };
 export type SessionUser = {
   username: string;
-  role: "admin" | "user";
+  role: AppRole;
 };
