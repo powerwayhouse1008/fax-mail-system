@@ -13,6 +13,7 @@ create table if not exists public.users (
 -- while older deployments may still expose the legacy `password` column.
 alter table public.users add column if not exists password text;
 alter table public.users add column if not exists role text not null default 'staff';
+update public.users set role = 'staff' where role is null;
 
 -- Hash password with bcrypt (bf)
 create or replace function public.hash_password(plain_password text)

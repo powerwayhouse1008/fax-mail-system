@@ -268,9 +268,20 @@ export async function readUsers(): Promise<UserAccount[]> {
     return readLocalUsersFile();
   }
   await seedDefaultUsersIfNeeded();
-   const data = await withUsersTable((table) =>
-    supabaseRequest<UserRow[]>(`/${table}?select=id,username,password_hash,password,name,role,created_at&order=created_at.asc`),
-  );
+   const data = await withUsersTable(async (table) => {
+    try {
+      return await supabaseRequest<UserRow[]>(
+        `/${table}?select=id,username,password_hash,password,name,role,created_at&order=created_at.asc`,
+      );
+    } catch (error) {
+      // Older Supabase deployments may not have the optional legacy columns.
+      // Read the stable schema so account management does not fail with 400.
+      if (!(error instanceof Error) || !error.message.includes("column users.")) throw error;
+      return supabaseRequest<UserRow[]>(
+        `/${table}?select=id,username,password_hash,name,created_at&order=created_at.asc`,
+      );
+    }
+  });
 
   return normalizeAccounts((data ?? []).map((row) => mapRowToAccount(row)));
 }
