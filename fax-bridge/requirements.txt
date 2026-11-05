@@ -1,2 +1,2 @@
 pywinauto==0.6.8
-pyinstaller==6.11.1
+pyinstaller>=6.15,<7
