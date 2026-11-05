@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PDFDocument, degrees } from "pdf-lib";
+import { readFaxStats, recordFaxResult } from "../../../lib/server/fax-control";
 
 const DEFAULT_BASE_URL = "https://sandbox-hea.nexlink2.jp";
 const DEFAULT_FAX_QUALITY = 1;
@@ -1334,6 +1335,10 @@ async function pollTransmissionUntilFinalized(
 }
 
 export async function POST(request: Request) {
+  const faxControl = await readFaxStats();
+  if (!faxControl.enabled) {
+    return NextResponse.json({ error: "FAX送信は管理者によって停止されています。" }, { status: 423 });
+  }
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
@@ -1464,6 +1469,7 @@ export async function POST(request: Request) {
             transmission,
           },
         });
+        await recordFaxResult(attachments.length > 0 ? "document" : "template", true);
       } catch (error) {
         const message =
           error instanceof Error ? toUserFacingFaxError(error.message) : "不明なエラー";
@@ -1472,6 +1478,7 @@ export async function POST(request: Request) {
           success: false,
           error: message,
         });
+        await recordFaxResult(attachments.length > 0 ? "document" : "template", false);
       }
     }
 

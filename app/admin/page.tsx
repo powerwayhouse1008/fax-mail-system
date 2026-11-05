@@ -17,6 +17,12 @@ export default function AdminHomePage() {
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [faxStats, setFaxStats] = useState<{ enabled: boolean; document: number; template: number; failed: number } | null>(null);
+
+  const loadFaxStats = async () => {
+    const response = await fetch("/api/admin/fax-control", { cache: "no-store" });
+    if (response.ok) setFaxStats(await response.json());
+  };
 
   const loadAccounts = async () => {
     try {
@@ -58,7 +64,21 @@ export default function AdminHomePage() {
 
   useEffect(() => {
     loadAccounts();
+    loadFaxStats();
   }, []);
+
+  const toggleFax = async () => {
+    if (!faxStats) return;
+    const response = await fetch("/api/admin/fax-control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: !faxStats.enabled }),
+    });
+    if (response.ok) {
+      setFaxStats(await response.json());
+      setNotice({ type: "success", text: faxStats.enabled ? "FAX送信を停止しました。" : "FAX送信を有効にしました。" });
+    }
+  };
 
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === selectedAccountId) ?? accounts[0],
@@ -172,6 +192,14 @@ export default function AdminHomePage() {
           </header>
 
           <div className="admin-grid">
+            <article className="admin-panel">
+              <h2>FAXサーバー管理</h2>
+              <button type="button" className={`btn ${faxStats?.enabled ? "btn-primary" : "btn-secondary"}`} onClick={toggleFax}>
+                FAX送信: {faxStats?.enabled ? "ON" : "OFF"}
+              </button>
+              <p>文書FAX: {faxStats?.document ?? 0}件 / テンプレートFAX: {faxStats?.template ?? 0}件 / 失敗: {faxStats?.failed ?? 0}件</p>
+              <Link href="/document-fax" className="btn btn-secondary">FAX送信画面を開く</Link>
+            </article>
             <article className="admin-panel">
               <h2>新規アカウント作成</h2>
               <form className="admin-form" onSubmit={handleCreateAccount}>
