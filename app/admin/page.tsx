@@ -19,27 +19,41 @@ export default function AdminHomePage() {
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const loadAccounts = async () => {
-    const response = await fetch("/api/users", { cache: "no-store" });
-    if (!response.ok) {
-       setNotice({ type: "error", text: "アカウント一覧の読み込みに失敗しました。" });
-      return;
-    }
+    try {
+      const response = await fetch("/api/users", { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as {
+        users?: UserAccount[];
+        message?: string;
+      } | null;
 
-    const payload = (await response.json()) as {
-     users: UserAccount[];
-    };
+      if (!response.ok) {
+        setNotice({
+          type: "error",
+          text: payload?.message
+            ? `アカウント一覧の読み込みに失敗しました: ${payload.message}`
+            : "アカウント一覧の読み込みに失敗しました。Supabase設定とusersテーブルを確認してください。",
+        });
+        return;
+      }
 
-    const mapped = payload.users.map((account) => ({
-      id: account.id,
-      name: account.name || account.username || "(No name)",
-      loginId: account.username || "(No ID)",
+      if (!Array.isArray(payload?.users)) {
+        setNotice({ type: "error", text: "サーバーから不正なアカウント一覧が返されました。" });
+        return;
+      }
+
+      const mapped = payload.users.map((account) => ({
+        id: account.id,
+        name: account.name || account.username || "(No name)",
+        loginId: account.username || "(No ID)",
         // Never preload stored password hash into the editable password field.
-      // Password should only be sent when admin explicitly types a new value.
-      password: "",
-    }));
+        password: "",
+      }));
 
-    setAccounts(mapped);
-    setSelectedAccountId((current) => current || mapped[0]?.id || "");
+      setAccounts(mapped);
+      setSelectedAccountId((current) => current || mapped[0]?.id || "");
+    } catch {
+      setNotice({ type: "error", text: "サーバーに接続できません。24/7サーバーとSupabase接続を確認してください。" });
+    }
   };
 
   useEffect(() => {
