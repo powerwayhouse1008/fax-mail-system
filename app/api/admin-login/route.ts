@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as { username?: string; email?: string; password?: string };
   const username = String(body.username ?? body.email ?? "").trim();
   const password = String(body.password ?? "").trim();
-  if (username !== ADMIN_CREDENTIAL.username || password !== ADMIN_CREDENTIAL.password) {
+  if (!ADMIN_CREDENTIAL.username || !ADMIN_CREDENTIAL.password || username !== ADMIN_CREDENTIAL.username || password !== ADMIN_CREDENTIAL.password) {
     return NextResponse.json({ message: "Invalid admin credentials" }, { status: 401 });
   }
   const response = NextResponse.json({ ok: true, username, role: "technical_admin" });

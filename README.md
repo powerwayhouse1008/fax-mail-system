@@ -8,14 +8,14 @@ SUPABASE_SERVICE_ROLE_KEY=xxxx
 # =========================
 # Admin login (tuỳ bạn)
 # =========================
-ADMIN_USER=admin
-ADMIN_PASS=admin
+ADMIN_USER=<set-a-unique-admin-username>
+ADMIN_PASS=<set-a-long-random-admin-password>
 
 # =========================
 # Gmail (Resend)
 # =========================
-RESEND_API_KEY=re_xxxxxxxxx
-RESEND_FROM_EMAIL=onboarding@resend.dev
+RESEND_API_KEY=<server-side-resend-api-key>
+RESEND_FROM_EMAIL=<verified-sender-email>
 
 # =========================
 # NexiLink (QUAN TRỌNG)
@@ -33,7 +33,7 @@ NEXLINK_API_PATH_FACSIMILE_DIRECT_SEND=/api/v1/facsimile/direct_send
 NEXLINK_API_PATH_FACSIMILES_DIRECT_SEND=/api/v1/facsimiles/direct_send
 
 # API TOKEN (không phải password login)
-NEXLINK_API_TOKEN=xxxxxxxxxxxxxxxx
+NEXLINK_API_TOKEN=<server-side-nexlink-api-token>
 
 # Optional (nếu hợp đồng có)
 NEXILINK_SENDER_ID=
@@ -47,9 +47,9 @@ NEXLINK_AUTH_SCHEME=token
 # =========================
 # Microsoft Entra ID Login
 # =========================
-AUTH_SECRET=replace-with-random-secret
-AUTH_MICROSOFT_ENTRA_ID_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-AUTH_MICROSOFT_ENTRA_ID_SECRET=xxxxxxxxxxxxxxxxxxxx
+AUTH_SECRET=<long-random-secret>
+AUTH_MICROSOFT_ENTRA_ID_ID=<microsoft-client-id>
+AUTH_MICROSOFT_ENTRA_ID_SECRET=<server-side-client-secret>
 AUTH_MICROSOFT_ENTRA_ID_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 # Optional: only allow email in this domain (without @)
 AUTH_ALLOWED_EMAIL_DOMAIN=yourcompany.co.j

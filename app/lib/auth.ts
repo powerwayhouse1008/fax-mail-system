@@ -13,19 +13,11 @@ export const AUTH_SESSION_STORAGE_KEY = "fax_mail_auth_session";
 export const AUTH_COOKIE_NAME = "fax_mail_auth";
 
 export const DEFAULT_USER_ACCOUNTS: UserAccount[] = [
-  {
-    id: "default-user-1",
-    username: "staff",
-    password: "123456",
-    name: "Staff",
-    createdAt: "2026-04-02T00:00:00.000Z",
-    role: "staff",
-  },
 ];
 
 export const ADMIN_CREDENTIAL = {
-  username: "admin",
-  password: "admin123",
+  username: process.env.ADMIN_USER ?? "",
+  password: process.env.ADMIN_PASS ?? "",
 };
 export type SessionUser = {
   username: string;
