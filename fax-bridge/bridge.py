@@ -18,6 +18,7 @@ def send_with_sharp(pdf_path: str, fax_number: str):
     except ImportError as exc:
         raise RuntimeError("pywinauto is not installed") from exc
 
+    print(f"[send] printing {os.path.basename(pdf_path)} to {PRINTER} for {fax_number}", flush=True)
     os.startfile(pdf_path, "printto", PRINTER)
     window = Desktop(backend="uia").window(title_re=".*相手先の選択.*")
     window.wait("visible", timeout=30)
@@ -26,6 +27,7 @@ def send_with_sharp(pdf_path: str, fax_number: str):
     fax_box.set_edit_text(fax_number)
     window.child_window(title="追加(A)", control_type="Button").click()
     window.child_window(title="次へ(N) >", control_type="Button").click()
+    print("[send] SHARP PC-FAX dialog accepted", flush=True)
     return {"ok": True, "message": "PC-FAX送信を開始しました。"}
 
 class Handler(BaseHTTPRequestHandler):
@@ -50,6 +52,7 @@ class Handler(BaseHTTPRequestHandler):
             result = send_with_sharp(path, number)
             self.respond(200, result)
         except Exception as exc:
+            print(f"[error] {type(exc).__name__}: {exc}", flush=True)
             self.respond(500, {"ok": False, "error": str(exc)})
 
     def respond(self, status, payload):
