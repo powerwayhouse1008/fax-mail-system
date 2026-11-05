@@ -3,7 +3,12 @@ const fs = require("fs");
 const path = require("path");
 
 const configPath = path.join(app.getPath("userData"), "server-url.txt");
-const defaultServerUrl = process.env.FAX_SERVER_URL || "https://your-fax-server.example.com";
+const packagedServerUrlPath = path.join(__dirname, "server-url.txt");
+let packagedServerUrl = "";
+try {
+  packagedServerUrl = fs.readFileSync(packagedServerUrlPath, "utf8").trim();
+} catch {}
+const defaultServerUrl = process.env.FAX_SERVER_URL || packagedServerUrl || "http://localhost:3000";
 
 function readServerUrl() {
   try {
