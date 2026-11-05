@@ -152,6 +152,9 @@ export default function AdminHomePage() {
             <Link href="/dashboard" className="btn btn-secondary">
               ダッシュボードに戻る
             </Link>
+            <Link href="/document-fax" className="btn btn-primary">
+              サーバー/APIでFAX送信
+            </Link>
           </header>
 
           <div className="admin-grid">

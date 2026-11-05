@@ -9,6 +9,9 @@ create table if not exists public.users (
   role text not null default 'staff' check (role in ('owner', 'manager', 'staff')),
   created_at timestamptz not null default now()
 );
+-- The application keeps the same scrypt/bcrypt-compatible hash in both fields
+-- while older deployments may still expose the legacy `password` column.
+alter table public.users add column if not exists password text;
 alter table public.users add column if not exists role text not null default 'staff';
 
 -- Hash password with bcrypt (bf)
