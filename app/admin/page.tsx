@@ -17,7 +17,7 @@ export default function AdminHomePage() {
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [faxStats, setFaxStats] = useState<{ enabled: boolean; document: number; template: number; failed: number } | null>(null);
+  const [faxStats, setFaxStats] = useState<{ enabled: boolean; mode: "server" | "nexlink"; document: number; template: number; failed: number } | null>(null);
 
   const loadFaxStats = async () => {
     const response = await fetch("/api/admin/fax-control", { cache: "no-store" });
@@ -78,6 +78,11 @@ export default function AdminHomePage() {
       setFaxStats(await response.json());
       setNotice({ type: "success", text: faxStats.enabled ? "FAX送信を停止しました。" : "FAX送信を有効にしました。" });
     }
+  };
+
+  const changeFaxMode = async (mode: "server" | "nexlink") => {
+    const response = await fetch("/api/admin/fax-control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) });
+    if (response.ok) setFaxStats(await response.json());
   };
 
   const selectedAccount = useMemo(
@@ -191,15 +196,17 @@ export default function AdminHomePage() {
             </Link>
           </header>
 
+          <article className="admin-panel fax-control-panel">
+            <div className="fax-control-heading"><div><h2>FAX送信モード</h2><p>全ユーザー共通の送信経路を選択します。</p></div><button type="button" className={`btn ${faxStats?.enabled ? "btn-primary" : "btn-secondary"}`} onClick={toggleFax}>FAX送信 {faxStats?.enabled ? "ON" : "OFF"}</button></div>
+            <div className="fax-mode-grid">
+              <button type="button" className={`fax-mode-option ${faxStats?.mode === "server" ? "active" : ""}`} onClick={() => changeFaxMode("server")}><strong>中央サーバー経由</strong><span>24/7サーバーで処理・送信</span></button>
+              <button type="button" className={`fax-mode-option ${faxStats?.mode === "nexlink" ? "active" : ""}`} onClick={() => changeFaxMode("nexlink")}><strong>NEXLINK Fax API</strong><span>NEXLINK API経由で送信</span></button>
+            </div>
+            <p>文書FAX: {faxStats?.document ?? 0}件　/　テンプレートFAX: {faxStats?.template ?? 0}件　/　失敗: {faxStats?.failed ?? 0}件</p>
+            <Link href="/document-fax" className="btn btn-secondary">FAX送信画面を開く</Link>
+          </article>
+
           <div className="admin-grid">
-            <article className="admin-panel">
-              <h2>FAXサーバー管理</h2>
-              <button type="button" className={`btn ${faxStats?.enabled ? "btn-primary" : "btn-secondary"}`} onClick={toggleFax}>
-                FAX送信: {faxStats?.enabled ? "ON" : "OFF"}
-              </button>
-              <p>文書FAX: {faxStats?.document ?? 0}件 / テンプレートFAX: {faxStats?.template ?? 0}件 / 失敗: {faxStats?.failed ?? 0}件</p>
-              <Link href="/document-fax" className="btn btn-secondary">FAX送信画面を開く</Link>
-            </article>
             <article className="admin-panel">
               <h2>新規アカウント作成</h2>
               <form className="admin-form" onSubmit={handleCreateAccount}>

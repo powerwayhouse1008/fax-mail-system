@@ -3,6 +3,7 @@ import path from "path";
 
 export type FaxStats = {
   enabled: boolean;
+  mode: "server" | "nexlink";
   document: number;
   template: number;
   failed: number;
@@ -10,7 +11,7 @@ export type FaxStats = {
 };
 
 const filePath = path.join(process.cwd(), "data", "fax-control.json");
-const defaults: FaxStats = { enabled: true, document: 0, template: 0, failed: 0, updatedAt: null };
+const defaults: FaxStats = { enabled: true, mode: "server", document: 0, template: 0, failed: 0, updatedAt: null };
 
 export async function readFaxStats(): Promise<FaxStats> {
   try {
@@ -27,6 +28,12 @@ async function writeFaxStats(stats: FaxStats) {
 
 export async function setFaxEnabled(enabled: boolean) {
   const stats = { ...(await readFaxStats()), enabled, updatedAt: new Date().toISOString() };
+  await writeFaxStats(stats);
+  return stats;
+}
+
+export async function setFaxMode(mode: "server" | "nexlink") {
+  const stats = { ...(await readFaxStats()), mode, updatedAt: new Date().toISOString() };
   await writeFaxStats(stats);
   return stats;
 }
