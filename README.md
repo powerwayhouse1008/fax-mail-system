@@ -9,7 +9,7 @@ SUPABASE_SERVICE_ROLE_KEY=xxxx
 # Admin login (tuỳ bạn)
 # =========================
 ADMIN_USER=admin
-ADMIN_PASS=admin123
+ADMIN_PASS=admin
 
 # =========================
 # Gmail (Resend)
