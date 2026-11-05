@@ -7,8 +7,11 @@ py -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
 $env:FAX_BRIDGE_TOKEN = "use-a-long-random-token"
 $env:FAX_PRINTER_NAME = "SHARP MX-2661 FAX"
+$env:FAX_PDF_VIEWER = "C:\\Tools\\SumatraPDF\\SumatraPDF.exe"
 py bridge.py
 ```
+
+Download the portable SumatraPDF executable and set `FAX_PDF_VIEWER` to its full path. This avoids Windows error 1155 when no default PDF print application is registered.
 
 If an older failed install left the environment incomplete, run:
 

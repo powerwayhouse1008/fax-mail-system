@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = os.getenv("FAX_BRIDGE_HOST", "0.0.0.0")
 PORT = int(os.getenv("FAX_BRIDGE_PORT", "8787"))
 PRINTER = os.getenv("FAX_PRINTER_NAME", "SHARP MX-2661 FAX")
+PDF_VIEWER = os.getenv("FAX_PDF_VIEWER", "")
 BRIDGE_TOKEN = os.getenv("FAX_BRIDGE_TOKEN", "")
 
 def send_with_sharp(pdf_path: str, fax_number: str):
@@ -19,7 +20,13 @@ def send_with_sharp(pdf_path: str, fax_number: str):
         raise RuntimeError("pywinauto is not installed") from exc
 
     print(f"[send] printing {os.path.basename(pdf_path)} to {PRINTER} for {fax_number}", flush=True)
-    os.startfile(pdf_path, "printto", PRINTER)
+    if PDF_VIEWER and os.path.isfile(PDF_VIEWER):
+        subprocess.Popen([PDF_VIEWER, "-print-to", PRINTER, pdf_path], close_fds=True)
+    else:
+        try:
+            os.startfile(pdf_path, "printto", PRINTER)
+        except OSError as exc:
+            raise RuntimeError("Set FAX_PDF_VIEWER to the full path of SumatraPDF.exe") from exc
     window = Desktop(backend="uia").window(title_re=".*相手先の選択.*")
     window.wait("visible", timeout=30)
     window.child_window(title="Fax番号(F):", control_type="RadioButton").click()
