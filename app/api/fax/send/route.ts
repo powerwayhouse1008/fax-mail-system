@@ -1334,11 +1334,33 @@ async function pollTransmissionUntilFinalized(
   }
 }
 
+async function sendViaLocalFaxBridge(bridgeUrl: string, bridgeToken: string, faxNumbers: string[], pdf: BinaryAttachment) {
+  const results: SendResult[] = [];
+  for (const faxNumber of faxNumbers) {
+    try {
+      const response = await fetch(`${bridgeUrl.replace(/\/$/, "")}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fax-Bridge-Token": bridgeToken },
+        body: JSON.stringify({ faxNumber, filename: pdf.filename, contentBase64: pdf.binary.toString("base64") }),
+        cache: "no-store",
+      });
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(data.error || `Fax Bridge error (${response.status})`);
+      results.push({ to: faxNumber, success: true, id: null, raw: data });
+    } catch (error) {
+      results.push({ to: faxNumber, success: false, error: error instanceof Error ? error.message : "Fax Bridge error" });
+    }
+  }
+  return results;
+}
+
 export async function POST(request: Request) {
   const faxControl = await readFaxStats();
   if (!faxControl.enabled) {
     return NextResponse.json({ error: "FAX送信は管理者によって停止されています。" }, { status: 423 });
   }
+  const bridgeUrl = readEnv("FAX_BRIDGE_URL", "FAX_SERVER_BRIDGE_URL");
+  const bridgeToken = readEnv("FAX_BRIDGE_TOKEN");
   const apiToken = readEnv(
     "NEXLINK_API_TOKEN",
     "NEXILINK_API_TOKEN",
@@ -1346,7 +1368,7 @@ export async function POST(request: Request) {
     "NEXILINK_API_KEY",
   );
 
-  if (!apiToken) {
+  if (faxControl.mode === "nexlink" && !apiToken) {
     return NextResponse.json(
       {
         error:
@@ -1414,6 +1436,15 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  if (faxControl.mode === "server") {
+    if (!bridgeUrl || !bridgeToken) {
+      return NextResponse.json({ error: "中央サーバーFAX Bridgeが未設定です。FAX_BRIDGE_URLとFAX_BRIDGE_TOKENを設定してください。" }, { status: 500 });
+    }
+    const results = await sendViaLocalFaxBridge(bridgeUrl, bridgeToken, validFaxTargets.map((item) => item.original), pdfFiles[0]);
+    const failed = results.filter((item) => !item.success);
+    return NextResponse.json({ total: results.length, successCount: results.length - failed.length, failed, results, mode: "server" }, { status: failed.length === results.length ? 502 : 200 });
   }
 
   const allowInternationalFax =
