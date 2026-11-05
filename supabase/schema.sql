@@ -49,3 +49,21 @@ create table if not exists public.data_spider_contacts (
 create index if not exists data_spider_contacts_fax_idx on public.data_spider_contacts (fax);
 create index if not exists data_spider_contacts_email_idx on public.data_spider_contacts (email);
 create index if not exists data_spider_contacts_created_at_idx on public.data_spider_contacts (created_at desc);
+
+create table if not exists public.desktop_fax_jobs (
+  id text primary key default gen_random_uuid()::text,
+  agent_id text not null,
+  fax_number text not null,
+  subject text,
+  body_text text,
+  document_url text,
+  document_name text,
+  status text not null default 'pending' check (status in ('pending', 'processing', 'sent', 'failed')),
+  error text,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  completed_at timestamptz
+);
+
+create index if not exists desktop_fax_jobs_agent_status_idx
+  on public.desktop_fax_jobs (agent_id, status, created_at);

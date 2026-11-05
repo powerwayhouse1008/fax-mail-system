@@ -1035,8 +1035,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
   } else {
-    pdfFile = await buildInlineImageAttachment(payload);
-    if (!pdfFile) {
+    const inlineImageAttachment = await buildInlineImageAttachment(payload);
+    if (inlineImageAttachment) {
+      pdfFile = await ensurePdfAttachment(inlineImageAttachment);
+    } else {
       pdfFile = buildPayloadPdfAttachment(payload);
     }
   }

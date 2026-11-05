@@ -1,0 +1,9 @@
+{
+  "server_url": "https://your-web-app.example.com",
+  "agent_id": "office-pc",
+  "agent_key": "replace-with-DESKTOP_FAX_AGENT_KEY",
+  "mode": "printer",
+  "printer_name": "SHARP MX-2661 FAX",
+  "fax_server": "",
+  "poll_seconds": 5
+}
