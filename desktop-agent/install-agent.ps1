@@ -15,6 +15,8 @@ $installDir = Join-Path $env:LOCALAPPDATA "FaxMailAgent"
 $configDir = Join-Path $env:APPDATA "FaxMailAgent"
 New-Item -ItemType Directory -Force -Path $installDir, $configDir | Out-Null
 $installedExe = Join-Path $installDir "FaxMailAgent.exe"
+Get-Process FaxMailAgent -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Milliseconds 500
 Copy-Item -LiteralPath $sourceExe -Destination $installedExe -Force
 
 $sumatraCandidates = @(
@@ -41,6 +43,5 @@ $config | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $configDir "confi
 
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 New-ItemProperty -Path $runKey -Name "FaxMailAgent" -Value ('"' + $installedExe + '"') -PropertyType String -Force | Out-Null
-Get-Process FaxMailAgent -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Process -FilePath $installedExe -WorkingDirectory $installDir -WindowStyle Hidden
 Write-Host "Fax Mail Agent installed and started. Log: $installDir\agent.log"
