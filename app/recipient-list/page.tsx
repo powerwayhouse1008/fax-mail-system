@@ -97,7 +97,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     type: string;
   } | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const [faxMethod, setFaxMethod] = useState<"api" | "desktop">("api");
+  const [faxMethod, setFaxMethod] = useState<"api" | "desktop">("desktop");
   const [desktopAgentId, setDesktopAgentId] = useState("office-pc");
   const [sendMessage, setSendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   useEffect(() => {
@@ -321,27 +321,40 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     try {
       const faxPreviewAttachment = await buildFaxPreviewAttachment();
       const faxAttachments = faxPreviewAttachment ? [faxPreviewAttachment] : attachments;
+      let usedFaxMethod: "api" | "desktop" = faxMethod;
+      let usedApiFallback = false;
+      const faxRequestBody = JSON.stringify({
+        agentId: desktopAgentId,
+        faxNumbers,
+        subject: mailSubject,
+        html: mailBodyHtml,
+        text: mailBodyText,
+        attachments: faxAttachments,
+        fax_quality: 1,
+        mapping_columns: JSON.stringify({ fax: 0 }),
+        documentUrl: uploadedCard?.url ?? attachments[0]?.url,
+        documentName: uploadedCard?.name ?? attachments[0]?.filename,
+      });
+      const sendFax = async () => {
+        if (faxNumbers.length === 0) return null;
+        const request = (url: string) => fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: faxRequestBody,
+        });
+        if (faxMethod === "api") return request("/api/fax/send");
+        try {
+          const desktopResponse = await request("/api/desktop-fax/jobs");
+          if (desktopResponse.ok) return desktopResponse;
+        } catch {
+          // Fall through to the API only when the desktop job was not accepted.
+        }
+        usedFaxMethod = "api";
+        usedApiFallback = true;
+        return request("/api/fax/send");
+      };
       const [faxResponse, gmailResponse] = await Promise.all([
-        faxNumbers.length > 0
-          ? fetch(faxMethod === "desktop" ? "/api/desktop-fax/jobs" : "/api/fax/send", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                agentId: desktopAgentId,
-                faxNumbers,
-                subject: mailSubject,
-                html: mailBodyHtml,
-                text: mailBodyText,
-                attachments: faxAttachments,
-                fax_quality: 1,
-                mapping_columns: JSON.stringify({ fax: 0 }),
-                documentUrl: uploadedCard?.url ?? attachments[0]?.url,
-                documentName: uploadedCard?.name ?? attachments[0]?.filename,
-              }),
-            })
-          : Promise.resolve(null),
+        sendFax(),
         gmailAddresses.length > 0
           ? fetch("/api/gmail/send", {
               method: "POST",
@@ -393,7 +406,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
         })),
       ]);
 
-      const faxSuccessCount = faxMethod === "desktop"
+      const faxSuccessCount = usedFaxMethod === "desktop"
         ? (typeof faxData?.total === "number" ? faxData.total : 0)
         : (typeof faxData?.successCount === "number" ? faxData.successCount : 0);
       const gmailSuccessCount = typeof gmailData?.successCount === "number" ? gmailData.successCount : 0;
@@ -430,9 +443,9 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
       setSendMessage({
         type: "success",
-        text: faxMethod === "desktop"
+        text: usedFaxMethod === "desktop"
           ? `PC送信キューへ登録しました: FAX ${faxSuccessCount}件（PCエージェントで処理後に送信されます）${gmailSuccessCount ? ` / Gmail送信 ${gmailSuccessCount}件` : ""}`
-          : `送信完了: 成功 ${totalSuccess}件（FAX ${faxSuccessCount}件, Gmail ${gmailSuccessCount}件）`,
+          : `${usedApiFallback ? "ホストPCへの登録に失敗したため、APIへ自動切替しました。" : ""}送信完了: 成功 ${totalSuccess}件（FAX ${faxSuccessCount}件, Gmail ${gmailSuccessCount}件）`,
       });
     } catch {
       setSendMessage({
