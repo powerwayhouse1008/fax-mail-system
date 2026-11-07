@@ -1,5 +1,14 @@
 node_modules
 .next
+build/
+dist/
+*.spec
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+desktop-agent/.venv/
+desktop-agent/build/
+desktop-agent/dist/
 .env
 .env.*
 !.env.example

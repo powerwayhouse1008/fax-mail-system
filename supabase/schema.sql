@@ -71,3 +71,26 @@ create table if not exists public.fax_control (
 insert into public.fax_control (id)
 values ('singleton')
 on conflict (id) do nothing;
+
+create table if not exists public.desktop_fax_jobs (
+  id text primary key default gen_random_uuid()::text,
+  agent_id text not null,
+  fax_number text not null,
+  subject text,
+  body_text text,
+  document_url text,
+  document_name text,
+  document_base64 text,
+  document_mime_type text,
+  status text not null default 'pending' check (status in ('pending', 'processing', 'sent', 'failed')),
+  error text,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  completed_at timestamptz
+);
+
+create index if not exists desktop_fax_jobs_agent_status_idx
+  on public.desktop_fax_jobs (agent_id, status, created_at);
+
+alter table public.desktop_fax_jobs add column if not exists document_base64 text;
+alter table public.desktop_fax_jobs add column if not exists document_mime_type text;

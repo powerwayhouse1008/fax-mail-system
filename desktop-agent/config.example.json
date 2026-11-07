@@ -1,0 +1,12 @@
+{
+  "server_url": "https://your-web-app.example.com",
+  "agent_id": "office-pc",
+  "agent_key": "replace-with-DESKTOP_FAX_AGENT_KEY",
+  "mode": "sharp_pcfax",
+  "printer_name": "SHARP MX-2661 FAX",
+  "pdf_viewer": "C:\\Tools\\SumatraPDF\\SumatraPDF.exe",
+  "recipient_window": ".*相手先の選択.*",
+  "dialog_timeout_seconds": 60,
+  "fax_server": "",
+  "poll_seconds": 5
+}

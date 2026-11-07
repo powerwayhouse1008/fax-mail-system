@@ -1,0 +1,2 @@
+pywin32==308
+pywinauto==0.6.8

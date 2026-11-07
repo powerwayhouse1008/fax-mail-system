@@ -97,6 +97,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     type: string;
   } | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [faxMethod, setFaxMethod] = useState<"api" | "desktop">("api");
+  const [desktopAgentId, setDesktopAgentId] = useState("office-pc");
   const [sendMessage, setSendMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   useEffect(() => {
     if (typeof searchParams?.faxList === "string" && searchParams.faxList.trim()) {
@@ -321,12 +323,13 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       const faxAttachments = faxPreviewAttachment ? [faxPreviewAttachment] : attachments;
       const [faxResponse, gmailResponse] = await Promise.all([
         faxNumbers.length > 0
-          ? fetch("/api/fax/send", {
+          ? fetch(faxMethod === "desktop" ? "/api/desktop-fax/jobs" : "/api/fax/send", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
               },
               body: JSON.stringify({
+                agentId: desktopAgentId,
                 faxNumbers,
                 subject: mailSubject,
                 html: mailBodyHtml,
@@ -334,6 +337,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
                 attachments: faxAttachments,
                 fax_quality: 1,
                 mapping_columns: JSON.stringify({ fax: 0 }),
+                documentUrl: uploadedCard?.url ?? attachments[0]?.url,
+                documentName: uploadedCard?.name ?? attachments[0]?.filename,
               }),
             })
           : Promise.resolve(null),
@@ -388,7 +393,9 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
         })),
       ]);
 
-      const faxSuccessCount = typeof faxData?.successCount === "number" ? faxData.successCount : 0;
+      const faxSuccessCount = faxMethod === "desktop"
+        ? (typeof faxData?.total === "number" ? faxData.total : 0)
+        : (typeof faxData?.successCount === "number" ? faxData.successCount : 0);
       const gmailSuccessCount = typeof gmailData?.successCount === "number" ? gmailData.successCount : 0;
       const faxFailedCount = Array.isArray(faxData?.failed) ? faxData.failed.length : 0;
       const gmailFailedCount = Array.isArray(gmailData?.failed) ? gmailData.failed.length : 0;
@@ -423,7 +430,9 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
       setSendMessage({
         type: "success",
-        text: `送信完了: 成功 ${totalSuccess}件（FAX ${faxSuccessCount}件, Gmail ${gmailSuccessCount}件）`,
+        text: faxMethod === "desktop"
+          ? `PC送信キューへ登録しました: FAX ${faxSuccessCount}件（PCエージェントで処理後に送信されます）${gmailSuccessCount ? ` / Gmail送信 ${gmailSuccessCount}件` : ""}`
+          : `送信完了: 成功 ${totalSuccess}件（FAX ${faxSuccessCount}件, Gmail ${gmailSuccessCount}件）`,
       });
     } catch {
       setSendMessage({
@@ -449,6 +458,21 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
             </Link>
           </div>
         </header>
+
+        <section className="recipient-preview">
+          <h2>FAX送信方法</h2>
+          <div className="fax-method-options">
+            <label><input type="radio" name="fax-method" checked={faxMethod === "api"} onChange={() => setFaxMethod("api")} /> APIで送信</label>
+            <label><input type="radio" name="fax-method" checked={faxMethod === "desktop"} onChange={() => setFaxMethod("desktop")} /> ホストPC・複合機で送信</label>
+          </div>
+          {faxMethod === "desktop" ? (
+            <label className="field">
+              <span>デスクトップエージェントID</span>
+              <input value={desktopAgentId} onChange={(event) => setDesktopAgentId(event.target.value)} placeholder="office-pc" />
+              <small>Windowsエージェントと同じIDを指定してください。ジョブはPCが受信してから印刷されます。</small>
+            </label>
+          ) : null}
+        </section>
 
         <div className="recipient-grid">
           <label className="field">
