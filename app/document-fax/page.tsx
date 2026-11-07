@@ -543,7 +543,6 @@ export default function DocumentFaxPage() {
   const [faxListInput, setFaxListInput] = useState("");
   const [faxMethod, setFaxMethod] = useState<"api" | "desktop">("desktop");
   const [desktopAgentId, setDesktopAgentId] = useState("office-pc");
-  const [paperSize, setPaperSize] = useState<"A4" | "A3">("A4");
   const [subject, setSubject] = useState("");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -617,7 +616,7 @@ export default function DocumentFaxPage() {
         subject: resolvedSubject,
         text: resolvedSubject,
         attachments,
-        paper_size: paperSize,
+        paper_size: "A4",
         fax_quality: 1,
         mapping_columns: JSON.stringify({ fax: 0 }),
         documentUrl: attachments[0] && "url" in attachments[0] ? attachments[0].url : undefined,
@@ -786,13 +785,6 @@ export default function DocumentFaxPage() {
             ) : null}
           </div>
 
-          <label className="field">
-            <span>原稿サイズ</span>
-            <select value={paperSize} onChange={(event) => setPaperSize(event.target.value as "A4" | "A3")}>
-              <option value="A4">A4</option>
-              <option value="A3">A3</option>
-            </select>
-          </label>
 
           {message ? (
             <p
