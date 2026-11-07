@@ -27,13 +27,28 @@ def send_with_sharp(pdf_path: str, fax_number: str):
             os.startfile(pdf_path, "printto", PRINTER)
         except OSError as exc:
             raise RuntimeError("Set FAX_PDF_VIEWER to the full path of SumatraPDF.exe") from exc
-    window = Desktop(backend="uia").window(title_re=".*相手先の選択.*")
-    window.wait("visible", timeout=30)
+    desktop = Desktop(backend="uia")
+    window = desktop.window(title_re=".*相手先の選択.*")
+    window.wait("visible", timeout=60)
     window.child_window(title="Fax番号(F):", control_type="RadioButton").click()
     fax_box = window.child_window(control_type="Edit", found_index=1)
     fax_box.set_edit_text(fax_number)
     window.child_window(title="追加(A)", control_type="Button").click()
     window.child_window(title="次へ(N) >", control_type="Button").click()
+
+    cover = desktop.window(title="送付状の選択")
+    cover.wait("visible", timeout=60)
+    cover.child_window(title="次へ(N) >", control_type="Button").click()
+
+    settings = desktop.window(title="ジョブの設定")
+    settings.wait("visible", timeout=60)
+    settings.child_window(title="ジョブ名(J)", control_type="Edit").set_edit_text("fax.pdf")
+    settings.child_window(title="次へ(N) >", control_type="Button").click()
+
+    preview = desktop.window(title="プレビュー")
+    preview.wait("visible", timeout=60)
+    preview.child_window(title="完了", control_type="Button").click()
+    preview.wait_not("visible", timeout=60)
     print("[send] SHARP PC-FAX dialog accepted", flush=True)
     return {"ok": True, "message": "PC-FAX送信を開始しました。"}
 

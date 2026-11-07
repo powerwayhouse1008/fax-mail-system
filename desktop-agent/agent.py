@@ -54,7 +54,8 @@ def materialize(job):
         raw = base64.b64decode(encoded, validate=True)
         if not raw.startswith(b"%PDF"):
             raise RuntimeError("Queued document is not a PDF")
-        path = os.path.join(tempfile.gettempdir(), f"fax-mail-{job['id']}.pdf")
+        short_id = str(job.get("id") or "job").replace("-", "")[:8]
+        path = os.path.join(tempfile.gettempdir(), f"fax-{short_id}.pdf")
         with open(path, "wb") as output:
             output.write(raw)
         return path
@@ -62,7 +63,8 @@ def materialize(job):
     if not url:
         raise RuntimeError("Queued fax has no document")
     suffix = os.path.splitext(name or urllib.parse.urlparse(url).path)[1] or ".bin"
-    path = os.path.join(tempfile.gettempdir(), f"fax-mail-{job['id']}{suffix}")
+    short_id = str(job.get("id") or "job").replace("-", "")[:8]
+    path = os.path.join(tempfile.gettempdir(), f"fax-{short_id}{suffix}")
     urllib.request.urlretrieve(url, path)
     return path
 
@@ -90,12 +92,29 @@ def send_sharp_pcfax(job, config):
         subprocess.Popen([viewer, "-print-to", printer, path], close_fds=True)
     else:
         win32api.ShellExecute(0, "printto", path, f'"{printer}"', ".", 0)
-    window = Desktop(backend="uia").window(title_re=config.get("recipient_window", ".*相手先の選択.*"))
-    window.wait("visible", timeout=config.get("dialog_timeout_seconds", 60))
-    window.child_window(title="Fax番号(F):", control_type="RadioButton").click()
-    window.child_window(control_type="Edit", found_index=1).set_edit_text(job["fax_number"])
-    window.child_window(title="追加(A)", control_type="Button").click()
-    window.child_window(title="次へ(N) >", control_type="Button").click()
+    timeout = config.get("dialog_timeout_seconds", 60)
+    desktop = Desktop(backend="uia")
+    recipient = desktop.window(title_re=config.get("recipient_window", ".*相手先の選択.*"))
+    recipient.wait("visible", timeout=timeout)
+    recipient.child_window(title="Fax番号(F):", control_type="RadioButton").click()
+    recipient.child_window(control_type="Edit", found_index=1).set_edit_text(job["fax_number"])
+    recipient.child_window(title="追加(A)", control_type="Button").click()
+    recipient.child_window(title="次へ(N) >", control_type="Button").click()
+
+    cover = desktop.window(title="送付状の選択")
+    cover.wait("visible", timeout=timeout)
+    cover.child_window(title="次へ(N) >", control_type="Button").click()
+
+    settings = desktop.window(title="ジョブの設定")
+    settings.wait("visible", timeout=timeout)
+    short_id = str(job.get("id") or "job").replace("-", "")[:8]
+    settings.child_window(title="ジョブ名(J)", control_type="Edit").set_edit_text(f"fax-{short_id}.pdf")
+    settings.child_window(title="次へ(N) >", control_type="Button").click()
+
+    preview = desktop.window(title="プレビュー")
+    preview.wait("visible", timeout=timeout)
+    preview.child_window(title="完了", control_type="Button").click()
+    preview.wait_not("visible", timeout=timeout)
 
 
 def run():
