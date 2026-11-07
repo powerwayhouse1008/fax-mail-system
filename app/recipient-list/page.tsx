@@ -494,7 +494,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
               rows={8}
               value={faxListInput}
               onChange={(event) => setFaxListInput(event.target.value)}
-              placeholder={"03-1234-5678\n03-9876-5432"}
+              placeholder={"0312345678\n0398765432"}
             />
           </label>
 
