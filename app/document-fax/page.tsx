@@ -167,7 +167,7 @@ const detectLocale = (): Locale => {
 const cleanFaxNumbers = (value: string) =>
   value
     .split(/\r?\n|,|;/)
-    .map((item) => item.trim())
+    .map((item) => item.trim().replace(/[-\s]/g, ""))
     .filter(Boolean);
 
 const isImageDocument = (document: UploadedDocument) =>
@@ -541,6 +541,8 @@ const createShortJapaneseError = (value: unknown, locale: Locale = "ja") => {
 export default function DocumentFaxPage() {
   const [locale, setLocale] = useState<Locale>("ja");
   const [faxListInput, setFaxListInput] = useState("");
+  const [faxMethod, setFaxMethod] = useState<"api" | "desktop">("desktop");
+  const [desktopAgentId, setDesktopAgentId] = useState("office-pc");
   const [subject, setSubject] = useState("");
   const [documents, setDocuments] = useState<UploadedDocument[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -608,21 +610,44 @@ export default function DocumentFaxPage() {
 
     try {
       const attachments = await prepareAttachmentsForSend(documents, mobilePayloadTooLargeMessages[locale]);
-      const response = await fetch("/api/fax/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          faxNumbers,
-          subject: resolvedSubject,
-          text: resolvedSubject,
-          attachments,
-          paper_size: "A4",
-          fax_quality: 1,
-          mapping_columns: JSON.stringify({ fax: 0 }),
-        }),
+      const requestBody = JSON.stringify({
+        agentId: desktopAgentId,
+        faxNumbers,
+        subject: resolvedSubject,
+        text: resolvedSubject,
+        attachments,
+        paper_size: "A4",
+        fax_quality: 1,
+        mapping_columns: JSON.stringify({ fax: 0 }),
+        documentUrl: attachments[0] && "url" in attachments[0] ? attachments[0].url : undefined,
+        documentName: attachments[0]?.filename,
       });
+      const request = (url: string) => fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: requestBody,
+      });
+      let usedFaxMethod: "api" | "desktop" = faxMethod;
+      let usedApiFallback = false;
+      let response: Response;
+      if (faxMethod === "api") {
+        response = await request("/api/fax/send");
+      } else {
+        try {
+          const desktopResponse = await request("/api/desktop-fax/jobs");
+          if (desktopResponse.ok) {
+            response = desktopResponse;
+          } else {
+            usedFaxMethod = "api";
+            usedApiFallback = true;
+            response = await request("/api/fax/send");
+          }
+        } catch {
+          usedFaxMethod = "api";
+          usedApiFallback = true;
+          response = await request("/api/fax/send");
+        }
+      }
 
       const payload = await readSendResponse(response);
       const failed = Array.isArray(payload.failed) ? payload.failed : [];
@@ -648,9 +673,14 @@ export default function DocumentFaxPage() {
         return;
       }
 
+      const successCount = usedFaxMethod === "desktop"
+        ? (typeof payload.total === "number" ? payload.total : faxNumbers.length)
+        : (payload.successCount ?? faxNumbers.length);
       setMessage({
         type: "success",
-        text: `${t.sendSuccess} ${payload.successCount ?? faxNumbers.length} ${t.recipientsUnit}.`,
+        text: usedFaxMethod === "desktop"
+          ? `PC送信キューへ登録しました: FAX ${successCount}件`
+          : `${usedApiFallback ? "ホストPCへの登録に失敗したため、APIへ自動切替しました。" : ""}${t.sendSuccess} ${successCount} ${t.recipientsUnit}.`,
       });
     } catch (error) {
       setMessage({
@@ -683,7 +713,7 @@ export default function DocumentFaxPage() {
                 rows={8}
                 value={faxListInput}
                 onChange={(event) => setFaxListInput(event.target.value)}
-                placeholder={"03-1234-5678\n03-9876-5432"}
+                placeholder={"0312345678\n0398765432"}
               />
             </label>
 
@@ -745,6 +775,15 @@ export default function DocumentFaxPage() {
               placeholder={t.defaultSubject}
             />
           </label>
+
+          <div className="field">
+            <span>FAX送信方法</span>
+            <label><input type="radio" name="document-fax-method" checked={faxMethod === "desktop"} onChange={() => setFaxMethod("desktop")} /> ホストPC・複合機で送信</label>
+            <label><input type="radio" name="document-fax-method" checked={faxMethod === "api"} onChange={() => setFaxMethod("api")} /> APIで送信</label>
+            {faxMethod === "desktop" ? (
+              <input value={desktopAgentId} onChange={(event) => setDesktopAgentId(event.target.value)} placeholder="office-pc" />
+            ) : null}
+          </div>
 
           {message ? (
             <p
