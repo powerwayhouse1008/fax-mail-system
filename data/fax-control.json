@@ -1,5 +1,6 @@
 {
   "enabled": true,
+  "mode": "server",
   "document": 0,
   "template": 0,
   "failed": 0,
