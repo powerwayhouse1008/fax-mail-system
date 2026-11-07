@@ -55,3 +55,19 @@ create table if not exists public.data_spider_contacts (
 create index if not exists data_spider_contacts_fax_idx on public.data_spider_contacts (fax);
 create index if not exists data_spider_contacts_email_idx on public.data_spider_contacts (email);
 create index if not exists data_spider_contacts_created_at_idx on public.data_spider_contacts (created_at desc);
+
+-- Shared FAX controls must be persisted in Supabase because deployed servers
+-- do not provide a writable, durable local filesystem.
+create table if not exists public.fax_control (
+  id text primary key,
+  enabled boolean not null default true,
+  mode text not null default 'server' check (mode in ('server', 'nexlink')),
+  document integer not null default 0,
+  template integer not null default 0,
+  failed integer not null default 0,
+  updated_at timestamptz
+);
+
+insert into public.fax_control (id)
+values ('singleton')
+on conflict (id) do nothing;
