@@ -389,56 +389,10 @@ const prepareImageForFax = async (file: File) => {
 };
 
 const preparePdfForFax = async (file: File) => {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(await file.arrayBuffer()),
-    useWorkerFetch: false,
-    isEvalSupported: false,
-    useSystemFonts: true,
-  });
-  const pdf = await loadingTask.promise;
-  const documents: PreparedDocument[] = [];
-  const baseFilename = file.name.replace(/\.[^./\\]+$/, "");
-  let shouldConvertToImage = false;
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: 1 });
-    const scale = Math.min(FAX_PDF_RENDER_MAX_WIDTH / viewport.width, FAX_PDF_RENDER_MAX_HEIGHT / viewport.height);
-    const scaledViewport = page.getViewport({ scale });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(scaledViewport.width));
-    canvas.height = Math.max(1, Math.round(scaledViewport.height));
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("PDF could not be prepared for fax.");
-
-    context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
-    const contentBounds = getNonWhiteBounds(context, canvas.width, canvas.height);
-    const isSmallContentPdf =
-      contentBounds != null &&
-      contentBounds.width / canvas.width < SMALL_PDF_CONTENT_RATIO &&
-      contentBounds.height / canvas.height < SMALL_PDF_CONTENT_RATIO;
-
-    if (!isSmallContentPdf) {
-      await pdf.destroy();
-      return createPdfDocumentFromOriginalFile(file);
-    }
-
-    shouldConvertToImage = true;
-
-    documents.push({
-      filename: `${baseFilename}-page-${pageNumber}.png`,
-      type: "image/png",
-      content: createFaxPngFromCanvas(canvas, context),
-    });
-  }
-
-  await pdf.destroy();
-  return shouldConvertToImage ? documents : createPdfDocumentFromOriginalFile(file);
+  // Preserve the original PDF bytes and page geometry. Rendering pages to PNG
+  // here can shrink A4/A3 pages and permanently reduce text quality before
+  // the PC-Fax driver receives the document.
+  return createPdfDocumentFromOriginalFile(file);
 };
 
 const prepareFileForFax = async (file: File): Promise<UploadedDocument[]> => {
