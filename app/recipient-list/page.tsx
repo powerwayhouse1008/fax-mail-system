@@ -239,11 +239,10 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       };
     }
 
-    // A4 at 300 DPI (fax-ready raster). The previous 1240x1754 canvas was
-    // roughly 150 DPI and made fine text and embedded images look soft.
-    const rasterScale = 2;
-    const width = 1240 * rasterScale;
-    const height = 1754 * rasterScale;
+    // Keep the proven PC-Fax-compatible A4 raster dimensions.
+    const rasterScale = 1;
+    const width = 1240;
+    const height = 1754;
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
