@@ -231,12 +231,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     if (isGmailChannel) return null;
     if (typeof window === "undefined") return null;
 
-    if (uploadedCard?.url && isPdfAttachment(uploadedCard.name, uploadedCard.type)) {
-      return {
-        filename: uploadedCard.name || "fax-document.pdf",
-        url: uploadedCard.url,
-        type: "application/pdf",
-      };
+    if (faxMethod === "api" && uploadedCard?.url && isPdfAttachment(uploadedCard.name, uploadedCard.type)) {
+      return { filename: uploadedCard.name || "fax-document.pdf", url: uploadedCard.url, type: "application/pdf" };
     }
 
     // Keep the proven PC-Fax-compatible A4 raster dimensions.
@@ -294,6 +290,30 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
         const x = 350 * rasterScale + (740 * rasterScale - drawWidth) / 2;
         const y = 770 * rasterScale + (340 * rasterScale - drawHeight) / 2;
         ctx.drawImage(image, x, y, drawWidth, drawHeight);
+      }
+    } else if (uploadedCard?.url && isPdfAttachment(uploadedCard.name, uploadedCard.type)) {
+      try {
+        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+        const response = await fetch(uploadedCard.url);
+        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await response.arrayBuffer()), useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true }).promise;
+        const page = await pdf.getPage(1);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale: Math.min(1120 / baseViewport.width, 1500 / baseViewport.height) });
+        const pdfCanvas = document.createElement("canvas");
+        pdfCanvas.width = Math.round(viewport.width);
+        pdfCanvas.height = Math.round(viewport.height);
+        const pdfContext = pdfCanvas.getContext("2d");
+        if (pdfContext) {
+          await page.render({ canvasContext: pdfContext, viewport }).promise;
+          const ratio = Math.min(740 / pdfCanvas.width, 340 / pdfCanvas.height);
+          const drawWidth = pdfCanvas.width * ratio;
+          const drawHeight = pdfCanvas.height * ratio;
+          ctx.drawImage(pdfCanvas, 350 + (740 - drawWidth) / 2, 770 + (340 - drawHeight) / 2, drawWidth, drawHeight);
+        }
+        await pdf.destroy();
+      } catch {
+        // Keep the cover usable if PDF preview rendering is unavailable.
       }
     }
 
