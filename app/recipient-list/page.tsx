@@ -231,12 +231,14 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     if (isGmailChannel) return null;
     if (typeof window === "undefined") return null;
 
-    if (faxMethod === "api" && uploadedCard?.url && isPdfAttachment(uploadedCard.name, uploadedCard.type)) {
-      return { filename: uploadedCard.name || "fax-document.pdf", url: uploadedCard.url, type: "application/pdf" };
+    if (uploadedCard?.url && isPdfAttachment(uploadedCard.name, uploadedCard.type)) {
+      return {
+        filename: uploadedCard.name || "fax-document.pdf",
+        url: uploadedCard.url,
+        type: "application/pdf",
+      };
     }
 
-    // Keep the proven PC-Fax-compatible A4 raster dimensions.
-    const rasterScale = 1;
     const width = 1240;
     const height = 1754;
     const canvas = document.createElement("canvas");
@@ -250,8 +252,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     ctx.fillStyle = "#111";
 
     const drawText = (text: string, x: number, y: number, size = 36, weight = "400") => {
-      ctx.font = `${weight} ${size * rasterScale}px sans-serif`;
-      ctx.fillText(text, x * rasterScale, y * rasterScale);
+      ctx.font = `${weight} ${size}px sans-serif`;
+      ctx.fillText(text, x, y);
     };
 
     drawText("見積送付状", 70, 90, 52, "700");
@@ -265,7 +267,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     drawText(`連絡事項: ${faxDraftContent.contact || ""}`, 70, 450);
 
     ctx.strokeStyle = "#111";
-    ctx.strokeRect(70 * rasterScale, 500 * rasterScale, width - 140 * rasterScale, 650 * rasterScale);
+    ctx.strokeRect(70, 500, width - 140, 650);
     drawText("物件名 / 室", 90, 560, 30, "700");
     drawText(faxDraftContent.propertyName || "", 360, 560, 30);
     drawText("内見希望日", 90, 640, 30, "700");
@@ -274,7 +276,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     drawText(faxDraftContent.preferredTime || "", 360, 720, 30);
     drawText("名刺", 90, 800, 30, "700");
 
-    ctx.strokeRect(340 * rasterScale, 760 * rasterScale, 760 * rasterScale, 360 * rasterScale);
+    ctx.strokeRect(340, 760, 760, 360);
     if (uploadedCard?.url && uploadedCard.type.startsWith("image/")) {
       const image = await new Promise<HTMLImageElement | null>((resolve) => {
         const img = new Image();
@@ -284,36 +286,12 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
         img.src = uploadedCard.url;
       });
       if (image) {
-        const ratio = Math.min((740 * rasterScale) / image.width, (340 * rasterScale) / image.height);
+        const ratio = Math.min(740 / image.width, 340 / image.height);
         const drawWidth = image.width * ratio;
         const drawHeight = image.height * ratio;
-        const x = 350 * rasterScale + (740 * rasterScale - drawWidth) / 2;
-        const y = 770 * rasterScale + (340 * rasterScale - drawHeight) / 2;
+        const x = 350 + (740 - drawWidth) / 2;
+        const y = 770 + (340 - drawHeight) / 2;
         ctx.drawImage(image, x, y, drawWidth, drawHeight);
-      }
-    } else if (uploadedCard?.url && isPdfAttachment(uploadedCard.name, uploadedCard.type)) {
-      try {
-        const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-        pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-        const response = await fetch(uploadedCard.url);
-        const pdf = await pdfjs.getDocument({ data: new Uint8Array(await response.arrayBuffer()), useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true }).promise;
-        const page = await pdf.getPage(1);
-        const baseViewport = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({ scale: Math.min(1120 / baseViewport.width, 1500 / baseViewport.height) });
-        const pdfCanvas = document.createElement("canvas");
-        pdfCanvas.width = Math.round(viewport.width);
-        pdfCanvas.height = Math.round(viewport.height);
-        const pdfContext = pdfCanvas.getContext("2d");
-        if (pdfContext) {
-          await page.render({ canvasContext: pdfContext, viewport }).promise;
-          const ratio = Math.min(740 / pdfCanvas.width, 340 / pdfCanvas.height);
-          const drawWidth = pdfCanvas.width * ratio;
-          const drawHeight = pdfCanvas.height * ratio;
-          ctx.drawImage(pdfCanvas, 350 + (740 - drawWidth) / 2, 770 + (340 - drawHeight) / 2, drawWidth, drawHeight);
-        }
-        await pdf.destroy();
-      } catch {
-        // Keep the cover usable if PDF preview rendering is unavailable.
       }
     }
 
@@ -342,9 +320,6 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
     try {
       const faxPreviewAttachment = await buildFaxPreviewAttachment();
-      // SHARP PC-Fax renders the generated A4 cover reliably. Keep the API
-      // workflow unchanged as well; fall back to the original attachment only
-      // when no cover can be generated.
       const faxAttachments = faxPreviewAttachment ? [faxPreviewAttachment] : attachments;
       let usedFaxMethod: "api" | "desktop" = faxMethod;
       let usedApiFallback = false;
@@ -519,7 +494,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
               rows={8}
               value={faxListInput}
               onChange={(event) => setFaxListInput(event.target.value)}
-              placeholder={"0312345678\n0398765432"}
+              placeholder={"03-1234-5678\n03-9876-5432"}
             />
           </label>
 
