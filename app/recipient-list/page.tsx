@@ -239,8 +239,11 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
       };
     }
 
-    const width = 1240;
-    const height = 1754;
+    // A4 at 300 DPI (fax-ready raster). The previous 1240x1754 canvas was
+    // roughly 150 DPI and made fine text and embedded images look soft.
+    const rasterScale = 2;
+    const width = 1240 * rasterScale;
+    const height = 1754 * rasterScale;
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -252,8 +255,8 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     ctx.fillStyle = "#111";
 
     const drawText = (text: string, x: number, y: number, size = 36, weight = "400") => {
-      ctx.font = `${weight} ${size}px sans-serif`;
-      ctx.fillText(text, x, y);
+      ctx.font = `${weight} ${size * rasterScale}px sans-serif`;
+      ctx.fillText(text, x * rasterScale, y * rasterScale);
     };
 
     drawText("見積送付状", 70, 90, 52, "700");
@@ -267,7 +270,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     drawText(`連絡事項: ${faxDraftContent.contact || ""}`, 70, 450);
 
     ctx.strokeStyle = "#111";
-    ctx.strokeRect(70, 500, width - 140, 650);
+    ctx.strokeRect(70 * rasterScale, 500 * rasterScale, width - 140 * rasterScale, 650 * rasterScale);
     drawText("物件名 / 室", 90, 560, 30, "700");
     drawText(faxDraftContent.propertyName || "", 360, 560, 30);
     drawText("内見希望日", 90, 640, 30, "700");
@@ -276,7 +279,7 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
     drawText(faxDraftContent.preferredTime || "", 360, 720, 30);
     drawText("名刺", 90, 800, 30, "700");
 
-    ctx.strokeRect(340, 760, 760, 360);
+    ctx.strokeRect(340 * rasterScale, 760 * rasterScale, 760 * rasterScale, 360 * rasterScale);
     if (uploadedCard?.url && uploadedCard.type.startsWith("image/")) {
       const image = await new Promise<HTMLImageElement | null>((resolve) => {
         const img = new Image();
@@ -286,11 +289,11 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
         img.src = uploadedCard.url;
       });
       if (image) {
-        const ratio = Math.min(740 / image.width, 340 / image.height);
+        const ratio = Math.min((740 * rasterScale) / image.width, (340 * rasterScale) / image.height);
         const drawWidth = image.width * ratio;
         const drawHeight = image.height * ratio;
-        const x = 350 + (740 - drawWidth) / 2;
-        const y = 770 + (340 - drawHeight) / 2;
+        const x = 350 * rasterScale + (740 * rasterScale - drawWidth) / 2;
+        const y = 770 * rasterScale + (340 * rasterScale - drawHeight) / 2;
         ctx.drawImage(image, x, y, drawWidth, drawHeight);
       }
     }
