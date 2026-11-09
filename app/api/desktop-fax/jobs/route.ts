@@ -8,6 +8,10 @@ import { PDFDocument } from "pdf-lib";
 type Job = { id: string; agent_id: string; fax_number: string; subject: string | null; body_text: string | null; document_url: string | null; document_name: string | null; document_base64: string | null; document_mime_type: string | null; status: string };
 type Attachment = { filename?: unknown; content?: unknown; type?: unknown; mimeType?: unknown };
 const MAX_DOCUMENT_BYTES = 12 * 1024 * 1024;
+// Keep raster documents sharp for the local PC-Fax driver. 200 DPI is a
+// practical fax-quality target and avoids downsampling images to a blurry A4
+// canvas. The API fax path is separate and remains unchanged.
+const DESKTOP_IMAGE_DPI = 200;
 
 function authorized(request: NextRequest) {
   const expected = process.env.DESKTOP_FAX_AGENT_KEY;
@@ -41,11 +45,10 @@ async function firstDocument(body: { attachments?: unknown; documentUrl?: unknow
   if (mimeType === "image/jpeg" || mimeType === "image/jpg" || mimeType === "image/png") {
     const pdf = await PDFDocument.create();
     const image = mimeType === "image/png" ? await pdf.embedPng(binary) : await pdf.embedJpg(binary);
-    const page = pdf.addPage([595.28, 841.89]);
-    const scale = Math.min(555.28 / image.width, 801.89 / image.height);
-    const width = image.width * scale;
-    const height = image.height * scale;
-    page.drawImage(image, { x: (595.28 - width) / 2, y: (841.89 - height) / 2, width, height });
+    const pageWidth = (image.width / DESKTOP_IMAGE_DPI) * 72;
+    const pageHeight = (image.height / DESKTOP_IMAGE_DPI) * 72;
+    const page = pdf.addPage([pageWidth, pageHeight]);
+    page.drawImage(image, { x: 0, y: 0, width: pageWidth, height: pageHeight });
     const pdfBytes = await pdf.save();
     return { document_url: null, document_name: `${filename.replace(/\.[^.]+$/, "")}.pdf`, document_base64: Buffer.from(pdfBytes).toString("base64"), document_mime_type: "application/pdf" };
   }
