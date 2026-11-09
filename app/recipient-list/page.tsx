@@ -322,15 +322,10 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
 
     try {
       const faxPreviewAttachment = await buildFaxPreviewAttachment();
-      // The desktop PC-Fax path must receive the original attachment bytes.
-      // The generated cover preview intentionally scales images down, which
-      // makes the received fax blurry. Keep the existing cover behavior for
-      // the API path so its current workflow is unchanged.
-      const faxAttachments = faxMethod === "desktop"
-        ? attachments
-        : faxPreviewAttachment
-          ? [faxPreviewAttachment]
-          : attachments;
+      // SHARP PC-Fax renders the generated A4 cover reliably. Keep the API
+      // workflow unchanged as well; fall back to the original attachment only
+      // when no cover can be generated.
+      const faxAttachments = faxPreviewAttachment ? [faxPreviewAttachment] : attachments;
       let usedFaxMethod: "api" | "desktop" = faxMethod;
       let usedApiFallback = false;
       const faxRequestBody = JSON.stringify({
