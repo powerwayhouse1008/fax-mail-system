@@ -79,8 +79,13 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!authorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!authorized(request) && !(await userAuthorized(request))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const agentId = request.nextUrl.searchParams.get("agentId")?.trim();
+  const ids = request.nextUrl.searchParams.get("ids")?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
+  if (!agentId && ids.length) {
+    const jobs = await supabaseRestRequest<Job[]>(`/desktop_fax_jobs?id=in.(${ids.map(encodeURIComponent).join(",")})&order=created_at.asc`);
+    return NextResponse.json({ jobs });
+  }
   if (!agentId) return NextResponse.json({ error: "agentId is required" }, { status: 400 });
   const jobs = await supabaseRestRequest<Job[]>(`/desktop_fax_jobs?agent_id=eq.${encodeURIComponent(agentId)}&status=eq.pending&order=created_at.asc&limit=1`);
   if (!jobs[0]) return new NextResponse(null, { status: 204 });

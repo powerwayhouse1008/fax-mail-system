@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { appendSendHistory } from "../send-history/history-store";
+import { appendSendHistory, updateFaxHistoryStatuses } from "../send-history/history-store";
 
 
 type RecipientListPageProps = {
@@ -405,6 +405,29 @@ export default function RecipientListPage({ searchParams }: RecipientListPagePro
           status: gmailFailedRecipients.has(email) ? ("failed" as const) : ("success" as const),
         })),
       ]);
+
+      if (usedFaxMethod === "desktop" && Array.isArray(faxData?.jobs)) {
+        const jobIds = faxData.jobs.map((job: { id?: unknown }) => typeof job.id === "string" ? job.id : "").filter(Boolean);
+        const pollDesktopStatuses = async (attempt = 0): Promise<void> => {
+          if (attempt >= 120 || jobIds.length === 0) return;
+          try {
+            const statusResponse = await fetch(`/api/desktop-fax/jobs?ids=${encodeURIComponent(jobIds.join(","))}`);
+            if (statusResponse.ok) {
+              const statusPayload = await statusResponse.json();
+              const statusMap: Record<string, "success" | "failed"> = {};
+              for (const job of Array.isArray(statusPayload.jobs) ? statusPayload.jobs : []) {
+                if (job.status === "sent" || job.status === "failed") statusMap[String(job.fax_number)] = job.status === "sent" ? "success" : "failed";
+              }
+              updateFaxHistoryStatuses(statusMap);
+              if (Object.keys(statusMap).length >= jobIds.length) return;
+            }
+          } catch {
+            // Retry while the desktop agent is processing the queue.
+          }
+          window.setTimeout(() => void pollDesktopStatuses(attempt + 1), 10000);
+        };
+        void pollDesktopStatuses();
+      }
 
       const faxSuccessCount = usedFaxMethod === "desktop"
         ? (typeof faxData?.total === "number" ? faxData.total : 0)

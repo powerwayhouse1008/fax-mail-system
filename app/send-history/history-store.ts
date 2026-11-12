@@ -164,3 +164,16 @@ export const syncFaxNotificationStatus = (referenceDate: Date = new Date()): Sen
 
   return updated;
 };
+
+export const updateFaxHistoryStatuses = (recipients: Record<string, "success" | "failed">) => {
+  if (typeof window === "undefined") return;
+  const items = loadSendHistory();
+  let changed = false;
+  const updated = items.map((item) => {
+    const nextStatus = item.channel === "fax" && item.status === "sending" ? recipients[item.recipient] : undefined;
+    if (!nextStatus) return item;
+    changed = true;
+    return { ...item, status: nextStatus, notifiedAt: formatDateTime(new Date()) };
+  });
+  if (changed) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+};
